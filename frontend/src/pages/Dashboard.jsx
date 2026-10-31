@@ -125,7 +125,7 @@ export default function Dashboard() {
             </h1>
 
             <p className="mt-7 max-w-xl text-base leading-7 text-[#536866] dark:text-[#95a9a6] sm:text-lg">
-              Share visual or audio evidence of local problems. Jan Aawaz’s multimodal AI understands what happened, evaluates the priority level, and forwards it to the responsible authority.
+              Share visual or audio evidence of local problems. <span className="font-bold text-[#0d3035] dark:text-[#f6f4ee]"><span className="text-[#ba7c29] dark:text-[#e8b855]">जन</span>Aawaz</span>’s multimodal AI understands what happened, evaluates the priority level, and forwards it to the responsible authority.
             </p>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">

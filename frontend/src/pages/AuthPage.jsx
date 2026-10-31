@@ -252,11 +252,15 @@ export default function AuthPage() {
           </div>
 
           <h1 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight text-[#0d3035] dark:text-[#f6f4ee]">
-            {step === 'otp'
-              ? 'Enter Verification Code'
-              : mode === 'login'
-              ? 'Sign in to Jan Aawaz'
-              : 'Create Citizen Profile'}
+            {step === 'otp' ? (
+              'Enter Verification Code'
+            ) : mode === 'login' ? (
+              <span>
+                Sign in to <span className="text-[#ba7c29] dark:text-[#e8b855]">जन</span>Aawaz
+              </span>
+            ) : (
+              'Create Citizen Profile'
+            )}
           </h1>
 
           <p className="mt-2 text-xs sm:text-sm leading-relaxed text-[#687976] dark:text-[#95a9a6]">

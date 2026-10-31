@@ -210,8 +210,8 @@ export default function AuthPage() {
         <div className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center py-8">
           {/* Top Status & Mode Toggle */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#bd7f23]/25 bg-[#fffaf0] dark:bg-[#0d3035] px-3 py-1.5 text-[10px] font-bold tracking-[.16em] uppercase text-[#ba7c29] dark:text-[#e8b855] w-fit shadow-sm">
-              <img src="/jan-icon-dark.png" alt="जन" className="size-4 rounded-sm object-contain" />
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#bd7f23]/25 bg-[#fffaf0] dark:bg-[#0d3035] px-3.5 py-1.5 text-[10px] font-bold tracking-[.16em] uppercase text-[#ba7c29] dark:text-[#e8b855] w-fit shadow-xs">
+              <span className="size-1.5 rounded-full bg-[#347161]" />
               CITIZEN AUTHENTICATION
             </div>
 

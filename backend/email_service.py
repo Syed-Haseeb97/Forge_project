@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional
 
 GMAIL_USER = os.getenv("GMAIL_USER", "syed424893@gmail.com")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "eeyi tjub jsvy yehk")
-EMAIL_FROM = os.getenv("EMAIL_FROM", "Jan Aawaz Public Portal <syed424893@gmail.com>")
+EMAIL_FROM = os.getenv("EMAIL_FROM", "Jan Aawaz (जनAawaz) Portal <syed424893@gmail.com>")
 
 # In-memory OTP storage: { normalized_email: { "code": str, "citizen_data": dict, "expires_at": datetime, "attempts": int } }
 _otp_store: Dict[str, Dict[str, Any]] = {}
@@ -65,15 +65,18 @@ def build_verification_html(code: str, email: str, title: str = "Verify your ema
 <html>
 <head>
   <meta charset="utf-8">
-  <title>CivicLine Citizen Verification</title>
+  <title>Jan Aawaz (जनAawaz) Citizen Verification</title>
 </head>
 <body style="margin: 0; padding: 32px 16px; background-color: #f6f4ee; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #102a2f;">
   <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 560px; background-color: #ffffff; border: 1px solid rgba(23, 62, 66, 0.12); border-radius: 20px; overflow: hidden; box-shadow: 0 16px 45px rgba(26, 53, 52, 0.08);">
-    <!-- Official Top Strip -->
+    <!-- Official Top Strip with Logo -->
     <tr>
-      <td style="background-color: #0d3035; padding: 12px 24px; text-align: center;">
-        <span style="color: rgba(255, 255, 255, 0.85); font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;">
-          AN OFFICIAL DIGITAL PUBLIC SERVICE
+      <td style="background-color: #0d3035; padding: 18px 24px; text-align: center;">
+        <div style="margin-bottom: 4px;">
+          <span style="color: #e8b855; font-size: 24px; font-weight: 800; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">जन</span><span style="color: #ffffff; font-size: 24px; font-weight: 800; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">Aawaz</span>
+        </div>
+        <span style="color: rgba(255, 255, 255, 0.7); font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;">
+          STATUTORY PUBLIC GRIEVANCE & REDRESSAL PORTAL
         </span>
       </td>
     </tr>
@@ -88,7 +91,7 @@ def build_verification_html(code: str, email: str, title: str = "Verify your ema
         </h1>
         {greeting_html}
         <p style="font-size: 14px; line-height: 1.6; color: #5f716e; margin: 0 0 24px 0;">
-          A citizen verification request was initiated for <strong style="color: #0d3035;">{email}</strong> on the CivicLine Public Grievance Portal. Use the official 6-digit authentication code below:
+          A citizen verification request was initiated for <strong style="color: #0d3035;">{email}</strong> on the <strong>Jan Aawaz (जनAawaz)</strong> Public Grievance Portal. Use your official 6-digit authentication code below:
         </p>
 
         <!-- Code Box -->
@@ -127,7 +130,7 @@ def build_verification_html(code: str, email: str, title: str = "Verify your ema
 def send_verification_email(to_email: str, code: str, title: str = "Verify your email address", greeting: str = "") -> bool:
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"जनAawaz Verification Code: {code}"
+        msg["Subject"] = f"Jan Aawaz (जनAawaz) Verification Code: {code}"
         msg["From"] = EMAIL_FROM
         msg["To"] = to_email
 

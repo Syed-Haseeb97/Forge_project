@@ -114,9 +114,9 @@ export default function Dashboard() {
         <div className="relative mx-auto grid max-w-[1240px] items-center gap-12 lg:grid-cols-[1.05fr_.95fr]">
           {/* Left Text Presentation */}
           <div>
-            <div className="mb-6 inline-flex items-center gap-2.5 rounded-full border border-[#bd7f23]/25 bg-[#fffaf0] dark:bg-[#0d3035] px-3.5 py-1.5 text-[11px] font-bold tracking-[0.14em] text-[#956018] dark:text-[#e8b855] shadow-sm">
-              <img src="/jan-icon-dark.png" alt="जन" className="size-4.5 rounded-sm object-contain" />
-              <span>जनAawaz • AI-POWERED CIVIC REDRESSAL</span>
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#bd7f23]/25 bg-[#fffaf0] dark:bg-[#0d3035] px-4 py-1.5 text-[11px] font-bold tracking-[0.14em] uppercase text-[#956018] dark:text-[#e8b855] shadow-xs">
+              <span className="size-1.5 rounded-full bg-[#ba7c29] dark:bg-[#e8b855]" />
+              <span><span className="text-[#ba7c29] dark:text-[#e8b855]">जन</span>Aawaz • AI-POWERED CIVIC RESPONSE</span>
             </div>
 
             <h1 className="max-w-2xl font-serif text-[44px] font-semibold leading-[1.03] tracking-[-0.035em] text-[#0d3035] dark:text-[#f6f4ee] sm:text-[62px] lg:text-[74px]">

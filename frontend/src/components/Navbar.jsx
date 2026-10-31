@@ -101,8 +101,8 @@ export default function Navbar() {
             {/* Authentication Status / Sign In / Sign Out */}
             {isVerified ? (
               <div className="flex items-center gap-2.5">
-                <div className="flex items-center gap-2 rounded-full bg-[#e3f0ea] dark:bg-[#123830] px-3 py-1.5 text-xs font-bold text-[#2f7661] dark:text-[#70b99e] border border-[#347161]/20 shadow-sm">
-                  <img src="/jan-icon-dark.png" alt="जन" className="size-4 rounded-sm object-contain" />
+                <div className="flex items-center gap-2 rounded-full bg-[#e3f0ea] dark:bg-[#123830] px-3.5 py-1.5 text-xs font-bold text-[#2f7661] dark:text-[#70b99e] border border-[#347161]/20">
+                  <span className="size-2 rounded-full bg-[#347161] dark:bg-[#70b99e]" />
                   <span className="truncate max-w-[150px]">
                     {user.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : user.email}
                   </span>

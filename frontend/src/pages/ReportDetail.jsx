@@ -1282,19 +1282,19 @@ export default function ReportDetail() {
                 placeholder="Your Name (or Department)"
                 value={commentForm.author}
                 onChange={e => setCommentForm(f => ({ ...f, author: e.target.value }))}
-                className="rounded-xl border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] px-3.5 py-2.5 text-xs text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29]"
+                className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] px-3.5 py-2.5 text-xs text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#95a5a3] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition font-medium"
               />
               {isAuthority ? (
                 <select
                   value={commentForm.role}
                   onChange={e => setCommentForm(f => ({ ...f, role: e.target.value }))}
-                  className="rounded-xl border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] px-3.5 py-2.5 text-xs font-semibold text-[#ba7c29] outline-none focus:border-[#ba7c29]"
+                  className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] px-3.5 py-2.5 text-xs font-semibold text-[#ba7c29] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition"
                 >
                   <option value="authority">Municipal Authority Representative</option>
                   <option value="citizen">Citizen Stakeholder</option>
                 </select>
               ) : (
-                <div className="flex items-center px-3.5 py-2.5 rounded-xl border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] text-xs font-semibold text-[#556b68] dark:text-[#95a9a6]">
+                <div className="flex items-center px-3.5 py-2.5 rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] text-xs font-semibold text-[#556b68] dark:text-[#95a9a6]">
                   Citizen Stakeholder
                 </div>
               )}
@@ -1305,12 +1305,12 @@ export default function ReportDetail() {
                 placeholder="Append formal inquiry or status note..."
                 value={commentForm.content}
                 onChange={e => setCommentForm(f => ({ ...f, content: e.target.value }))}
-                className="flex-1 rounded-xl border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] px-3.5 py-2.5 text-xs text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29]"
+                className="flex-1 rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] px-3.5 py-2.5 text-xs text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#95a5a3] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition font-medium"
               />
               <button
                 type="submit"
                 disabled={submittingComment || !commentForm.content.trim()}
-                className="flex items-center justify-center rounded-xl bg-[#0d3035] px-4 text-white hover:bg-[#16444a] transition disabled:opacity-50"
+                className="flex items-center justify-center rounded-xl bg-[#0d3035] px-4 text-white hover:bg-[#16444a] dark:bg-[#e8b855] dark:text-[#0d3035] transition disabled:opacity-50 shadow-xs"
               >
                 <Send size={14} />
               </button>

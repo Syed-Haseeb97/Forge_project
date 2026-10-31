@@ -209,7 +209,7 @@ export default function ReportsList() {
                 <CivicIcon name="search" size={16} className="absolute left-3.5 top-3.5 text-[#70817e]" />
                 <input
                   type="text"
-                  className="w-full rounded-xl border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] py-3 pl-10 pr-4 text-xs sm:text-sm text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#8a9996] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition"
+                  className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] py-3 pl-10 pr-4 text-xs sm:text-sm text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#8a9996] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition font-medium"
                   placeholder="Search by keywords, road, landmark..."
                   value={filters.search}
                   onChange={set('search')}
@@ -220,7 +220,7 @@ export default function ReportsList() {
             {/* Status Select */}
             <div className="relative">
               <select
-                className="w-full appearance-none rounded-xl border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] px-3.5 py-3 text-xs sm:text-sm font-semibold text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29]"
+                className="w-full appearance-none rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] px-3.5 py-3 text-xs sm:text-sm font-semibold text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition"
                 value={filters.status}
                 onChange={set('status')}
               >
@@ -233,7 +233,7 @@ export default function ReportsList() {
             {/* Severity Select */}
             <div className="relative">
               <select
-                className="w-full appearance-none rounded-xl border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] px-3.5 py-3 text-xs sm:text-sm font-semibold text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29]"
+                className="w-full appearance-none rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] px-3.5 py-3 text-xs sm:text-sm font-semibold text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition"
                 value={filters.severity}
                 onChange={set('severity')}
               >
@@ -247,7 +247,7 @@ export default function ReportsList() {
             <div className="flex gap-2">
               <div className="relative flex-1 min-w-0">
                 <select
-                  className="w-full truncate appearance-none rounded-xl border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] px-3.5 py-3 text-xs sm:text-sm font-semibold text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29]"
+                  className="w-full truncate appearance-none rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] px-3.5 py-3 text-xs sm:text-sm font-semibold text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition"
                   value={filters.category}
                   onChange={set('category')}
                 >
@@ -264,7 +264,7 @@ export default function ReportsList() {
                     setFilters({ status: '', severity: '', category: '', search: '' })
                     setOnlyWatched(false)
                   }}
-                  className="flex items-center justify-center size-11 rounded-xl border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] text-[#556966] hover:text-[#b04b37] hover:border-[#b04b37]/30 transition shrink-0"
+                  className="flex items-center justify-center size-11 rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] text-[#556966] hover:text-[#b04b37] hover:border-[#b04b37]/30 transition shrink-0"
                   title="Clear all filters"
                 >
                   <RotateCcw size={14} />

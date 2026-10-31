@@ -266,30 +266,32 @@ export default function Dashboard() {
           <div id="portal-card" className="relative mx-auto w-full max-w-[540px]">
             <div className="absolute -inset-4 rotate-2 rounded-[32px] bg-[#e9b955]/20 pointer-events-none" />
             <div className="relative overflow-hidden rounded-[26px] border border-white/70 dark:border-white/10 bg-white dark:bg-[#0d3035] shadow-[0_30px_70px_rgba(26,53,52,.16)]">
-              {/* Tab Header */}
-              <div className="flex border-b border-[#193d40]/10 dark:border-white/10 bg-[#fbfaf6] dark:bg-[#082024] p-1.5">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('report')}
-                  className={`flex-1 rounded-xl px-4 py-3 text-xs font-bold transition ${
-                    activeTab === 'report'
-                      ? 'bg-[#0d3035] dark:bg-[#e8b855] text-white dark:text-[#0d3035] shadow-sm'
-                      : 'text-[#70807f] hover:text-[#0d3035] dark:text-[#8a9896] dark:hover:text-white'
-                  }`}
-                >
-                  REPORT AN ISSUE
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('track')}
-                  className={`flex-1 rounded-xl px-4 py-3 text-xs font-bold transition ${
-                    activeTab === 'track'
-                      ? 'bg-[#0d3035] dark:bg-[#e8b855] text-white dark:text-[#0d3035] shadow-sm'
-                      : 'text-[#70807f] hover:text-[#0d3035] dark:text-[#8a9896] dark:hover:text-white'
-                  }`}
-                >
-                  TRACK COMPLAINT
-                </button>
+              {/* Tab Header (Segmented Pill Style matching Citizen Auth) */}
+              <div className="border-b border-[#173e42]/10 dark:border-white/10 bg-[#fbfaf6] dark:bg-[#071f23] p-3 flex items-center justify-center">
+                <div className="flex rounded-full border border-[#173e42]/15 bg-white/70 dark:bg-[#0b2529] p-1 w-full max-w-xs shadow-xs">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('report')}
+                    className={`flex-1 rounded-full px-4 py-2 text-xs font-bold transition text-center ${
+                      activeTab === 'report'
+                        ? 'bg-[#0d3035] text-white shadow-sm dark:bg-[#e8b855] dark:text-[#0d3035]'
+                        : 'text-[#617471] dark:text-[#8ea5a2] hover:text-[#0d3035] dark:hover:text-white'
+                    }`}
+                  >
+                    Report an Issue
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('track')}
+                    className={`flex-1 rounded-full px-4 py-2 text-xs font-bold transition text-center ${
+                      activeTab === 'track'
+                        ? 'bg-[#0d3035] text-white shadow-sm dark:bg-[#e8b855] dark:text-[#0d3035]'
+                        : 'text-[#617471] dark:text-[#8ea5a2] hover:text-[#0d3035] dark:hover:text-white'
+                    }`}
+                  >
+                    Track Docket
+                  </button>
+                </div>
               </div>
 
               {/* Tab Content 1: Report */}
@@ -371,12 +373,12 @@ export default function Dashboard() {
                     </div>
 
                     <div>
-                      <label className="mb-1.5 block text-xs font-bold text-[#102a2f] dark:text-[#f6f4ee]">
-                        Issue Summary / Title
+                      <label className="mb-1.5 block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+                        Issue Summary / Title <span className="text-[#b04b37]">*</span>
                       </label>
                       <input
                         required
-                        className="input"
+                        className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] px-4 py-3 text-sm text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#95a5a3] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition font-medium"
                         placeholder="e.g. Hazardous deep pothole near intersection"
                         value={quickForm.title}
                         onChange={e => setQuickForm(f => ({ ...f, title: e.target.value }))}
@@ -384,30 +386,33 @@ export default function Dashboard() {
                     </div>
 
                     <div>
-                      <label className="mb-1.5 block text-xs font-bold text-[#102a2f] dark:text-[#f6f4ee]">
-                        Infrastructure Department
+                      <label className="mb-1.5 block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+                        Infrastructure Department <span className="text-[#b04b37]">*</span>
                       </label>
-                      <select
-                        className="input"
-                        value={quickForm.category}
-                        onChange={e => setQuickForm(f => ({ ...f, category: e.target.value }))}
-                      >
-                        {CATEGORIES.map(c => (
-                          <option key={c.value} value={c.value}>
-                            {c.label}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="relative">
+                        <select
+                          className="w-full appearance-none rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] px-4 py-3 text-sm text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition font-semibold"
+                          value={quickForm.category}
+                          onChange={e => setQuickForm(f => ({ ...f, category: e.target.value }))}
+                        >
+                          {CATEGORIES.map(c => (
+                            <option key={c.value} value={c.value}>
+                              {c.label}
+                            </option>
+                          ))}
+                        </select>
+                        <CivicIcon name="chevron" size={15} className="pointer-events-none absolute right-4 top-3.5 rotate-90 text-[#718481]" />
+                      </div>
                     </div>
 
                     <div>
-                      <label className="mb-1.5 block text-xs font-bold text-[#102a2f] dark:text-[#f6f4ee]">
-                        Field Description
+                      <label className="mb-1.5 block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+                        Field Description <span className="text-[#b04b37]">*</span>
                       </label>
                       <textarea
                         required
                         rows={3}
-                        className="input resize-none"
+                        className="w-full resize-none rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] p-3 text-sm text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#95a5a3] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition leading-relaxed"
                         placeholder="What happened? Dimensions, safety hazard, nearby landmarks..."
                         value={quickForm.description}
                         onChange={e => setQuickForm(f => ({ ...f, description: e.target.value }))}
@@ -416,16 +421,16 @@ export default function Dashboard() {
 
                     <div>
                       <div className="mb-1.5 flex items-center justify-between">
-                        <label className="block text-xs font-bold text-[#102a2f] dark:text-[#f6f4ee]">
-                          Location / Street Reference
+                        <label className="block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+                          Location / Street Reference <span className="text-[#b04b37]">*</span>
                         </label>
                         <button
                           type="button"
                           onClick={acquireQuickLocation}
                           disabled={quickLocating}
-                          className="flex items-center gap-1 text-[10px] font-bold text-[#ba7c29] hover:underline"
+                          className="flex items-center gap-1.5 text-[10px] font-bold text-[#ba7c29] hover:underline"
                         >
-                          <CivicIcon name="location" size={11} />
+                          <CivicIcon name="location" size={12} />
                           <span>{quickLocating ? 'Acquiring GPS...' : (quickForm.latitude ? 'GPS Pinned ✓' : 'Pin My GPS')}</span>
                         </button>
                       </div>
@@ -433,7 +438,7 @@ export default function Dashboard() {
                         <CivicIcon name="location" size={17} className="absolute left-3.5 top-3.5 text-[#617572]" />
                         <input
                           required
-                          className="input pl-10"
+                          className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] py-3 pl-10 pr-4 text-sm text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#95a5a3] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition"
                           placeholder="Street, landmark, or intersection"
                           value={quickForm.location}
                           onChange={e => setQuickForm(f => ({ ...f, location: e.target.value }))}
@@ -532,18 +537,18 @@ export default function Dashboard() {
                       Complaint ID / Docket Reference
                     </label>
                     <div className="relative">
-                      <CivicIcon name="file" size={17} className="absolute left-3.5 top-3.5 text-[#718481]" />
+                      <CivicIcon name="file" size={17} className="absolute left-4 top-3.5 text-[#718481]" />
                       <input
                         value={trackingId}
                         onChange={e => setTrackingId(e.target.value)}
-                        placeholder="e.g. 1 or JA-2026-00001 or water burst"
-                        className="input pl-10"
+                        placeholder="e.g. JA-2026-00001 or 1 or water burst"
+                        className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] py-3.5 pl-11 pr-4 text-sm text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#95a5a3] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition font-medium"
                       />
                     </div>
                     <button
                       type="submit"
                       disabled={searchingTicket}
-                      className="btn-primary w-full py-3.5"
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#0d3035] px-6 py-4 text-xs font-bold uppercase tracking-wider text-white transition hover:bg-[#16444a] dark:bg-[#e8b855] dark:text-[#0d3035] dark:hover:bg-[#efc56b] shadow-md"
                     >
                       {searchingTicket ? 'SEARCHING REGISTRY...' : 'CHECK STATUS'} <CivicIcon name="arrow" size={16} />
                     </button>

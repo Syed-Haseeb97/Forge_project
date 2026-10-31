@@ -430,7 +430,7 @@ export default function SubmitReport() {
                       required
                       value={form.category}
                       onChange={set('category')}
-                      className="w-full appearance-none rounded-xl border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] px-4 py-3.5 text-sm text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition font-semibold"
+                      className="w-full appearance-none rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] px-4 py-3.5 text-sm text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition font-semibold"
                     >
                       {CATEGORIES.map(c => (
                         <option key={c.value} value={c.value}>
@@ -453,7 +453,7 @@ export default function SubmitReport() {
                     value={form.title}
                     onChange={set('title')}
                     placeholder="e.g. Hazardous deep pothole on flyover descent"
-                    className="w-full rounded-xl border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] px-4 py-3.5 text-sm text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#9aa6a4] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition"
+                    className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] px-4 py-3.5 text-sm text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#9aa6a4] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition font-medium"
                   />
                 </div>
 
@@ -468,7 +468,7 @@ export default function SubmitReport() {
                     value={form.description}
                     onChange={set('description')}
                     placeholder="What happened? Please include observable dimensions, risks to traffic or pedestrians, and nearby landmarks..."
-                    className="w-full resize-none rounded-xl border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] px-4 py-3 text-sm leading-6 text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#9aa6a4] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition"
+                    className="w-full resize-none rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] px-4 py-3 text-sm leading-6 text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#9aa6a4] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition"
                   />
                 </div>
 
@@ -653,7 +653,7 @@ export default function SubmitReport() {
                       value={form.location}
                       onChange={set('location')}
                       placeholder="Street name, landmark, cross junction..."
-                      className="w-full rounded-xl border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] py-3 pl-11 pr-4 text-sm text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#9aa6a4] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition"
+                      className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] py-3 pl-11 pr-4 text-sm text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#9aa6a4] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition font-medium"
                     />
                   </div>
 

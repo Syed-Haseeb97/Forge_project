@@ -7,7 +7,7 @@
 [![CI](https://github.com/Syed-Haseeb97/Forge_project/actions/workflows/ci.yml/badge.svg)](https://github.com/Syed-Haseeb97/Forge_project/actions/workflows/ci.yml)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?style=flat&logo=fastapi)](https://fastapi.tiangolo.com)
 [![React 18](https://img.shields.io/badge/React-18.3-61dafb.svg?style=flat&logo=react)](https://react.dev)
-[![Gemini API](https://img.shields.io/badge/Google_Gemini-2.5_Flash-4285f4.svg?style=flat&logo=google)](https://ai.google.dev)
+[![Gemini API](https://img.shields.io/badge/Google_Gemini-3.5_Flash_Lite_%7C_3.8_Flash-4285f4.svg?style=flat&logo=google)](https://ai.google.dev)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ecf8e.svg?style=flat&logo=supabase)](https://supabase.com)
 [![Open311](https://img.shields.io/badge/Open311-GeoReport_v2-e8b855.svg?style=flat)](https://www.open311.org)
 
@@ -111,18 +111,18 @@ Jan Aawaz adheres to a **strict zero-dummy-data policy**. Every statistic, map o
 
 | Screenshot | Description | Path |
 |---|---|---|
-| **AI Civic Pulse Brief** | Executive municipal brief with 3 prioritized actions and 10-minute live cache badge. | [`docs/screenshots/dashboard_civic_brief.png`](file:///D:/projects/fordge5/fordge/docs/screenshots/README.md) |
-| **AI Reasoning Trace** | Full multi-signal audit trace citing Open-Meteo rain, Overpass sensitive sites, and SLA rationale. | [`docs/screenshots/agentic_reasoning_trace.png`](file:///D:/projects/fordge5/fordge/docs/screenshots/README.md) |
-| **Plain-Language Explainer** | 8-language citizen ombudsman summary in Hindi with audio listen control. | [`docs/screenshots/multilingual_explainer_hindi.png`](file:///D:/projects/fordge5/fordge/docs/screenshots/README.md) |
-| **Official Dispatch Work Order** | Formal bureaucratic work order letter with Google Maps coordinates and SLA deadline. | [`docs/screenshots/dispatch_letter_modal.png`](file:///D:/projects/fordge5/fordge/docs/screenshots/README.md) |
-| **Multimodal Resolution Audit** | Comparative AI verification audit rejecting incomplete repairs and logging timeline strikes. | [`docs/screenshots/resolution_audit_before_after.png`](file:///D:/projects/fordge5/fordge/docs/screenshots/README.md) |
-| **300m Spatial GIS Hotspots** | Full-screen GIS map view rendering translucent 300-meter circular grievance clusters. | [`docs/screenshots/gis_hotspot_clusters.png`](file:///D:/projects/fordge5/fordge/docs/screenshots/README.md) |
+| **AI Civic Pulse Brief** | Executive municipal brief with 3 prioritized actions and 10-minute live cache badge. | [`docs/screenshots/dashboard_civic_brief.png`](docs/screenshots/README.md) |
+| **AI Reasoning Trace** | Full multi-signal audit trace citing Open-Meteo rain, Overpass sensitive sites, and SLA rationale. | [`docs/screenshots/agentic_reasoning_trace.png`](docs/screenshots/README.md) |
+| **Plain-Language Explainer** | 8-language citizen ombudsman summary in Hindi with audio listen control. | [`docs/screenshots/multilingual_explainer_hindi.png`](docs/screenshots/README.md) |
+| **Official Dispatch Work Order** | Formal bureaucratic work order letter with Google Maps coordinates and SLA deadline. | [`docs/screenshots/dispatch_letter_modal.png`](docs/screenshots/README.md) |
+| **Multimodal Resolution Audit** | Comparative AI verification audit rejecting incomplete repairs and logging timeline strikes. | [`docs/screenshots/resolution_audit_before_after.png`](docs/screenshots/README.md) |
+| **300m Spatial GIS Hotspots** | Full-screen GIS map view rendering translucent 300-meter circular grievance clusters. | [`docs/screenshots/gis_hotspot_clusters.png`](docs/screenshots/README.md) |
 
 ---
 
 ## ⚙️ Configuration & Environment Variables
 
-All system configurations are managed via environment variables documented in [`backend/.env.example`](file:///D:/projects/fordge5/fordge/backend/.env.example):
+All system configurations are managed via environment variables documented in [`backend/.env.example`](backend/.env.example):
 
 | Variable | Default Value | Description |
 |---|---|---|
@@ -206,7 +206,7 @@ cd frontend
 npm run build
 ```
 
-Both tests run automatically on every pull request and push to `main` via the GitHub Actions workflow in [`.github/workflows/ci.yml`](file:///D:/projects/fordge5/fordge/.github/workflows/ci.yml).
+Both tests run automatically on every pull request and push to `main` via the GitHub Actions workflow in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ---
 
@@ -219,7 +219,7 @@ Both tests run automatically on every pull request and push to `main` via the Gi
 - In **Storage**, create a public bucket named `reports` (or use local filesystem storage via `UPLOAD_DIR`).
 
 ### 2. Backend Deployment (Render or Fly.io)
-Deploy using the included [`backend/Dockerfile`](file:///D:/projects/fordge5/fordge/backend/Dockerfile):
+Deploy using the included [`backend/Dockerfile`](backend/Dockerfile):
 ```dockerfile
 FROM python:3.11-slim
 WORKDIR /app
@@ -237,15 +237,27 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 > The root `vercel.json` has been removed. In the Vercel Project Settings, **Root Directory MUST be set to `frontend`**.
 - Link the repository to Vercel and configure the root directory as `frontend`.
 - Set Environment Variable: `VITE_API_BASE=https://your-backend-api.onrender.com`.
-- The configuration in [`frontend/vercel.json`](file:///D:/projects/fordge5/fordge/frontend/vercel.json) handles single-page app routing:
+- The configuration in [`frontend/vercel.json`](frontend/vercel.json) handles single-page app routing:
 ```json
 {
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "https://your-backend-api.onrender.com/api/$1" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
   ]
 }
 ```
+
+---
+
+## 👥 Team & Contributions ("Who Built What")
+
+| Contributor | Focus Area | Key Contributions |
+|---|---|---|
+| **Syed Haseeb** (`@Syed-Haseeb97`) | Full-Stack & AI Pipeline Lead | End-to-end agentic triage pipeline, Gemini multimodal reasoning, Open GIS integrations, database schema, FastAPI backend, and React/Tailwind frontend architecture. |
+| **Teammate Placeholder 1** | Geospatial & Infrastructure Services | OpenStreetMap Overpass spatial queries, Open-Meteo microclimate integration, and GIS hotspot cluster algorithms. |
+| **Teammate Placeholder 2** | UI/UX & Citizen Accessibility | Responsive citizen portal, citizen authentication flows, multilingual explainer with speech synthesis, and dark/light civic styling. |
 
 ---
 
@@ -261,7 +273,9 @@ As an engineering hackathon prototype, Jan Aawaz acknowledges several practical 
 
 ## 📄 License & Attribution
 
-- Built under the **MIT License**.
+- Released under the open-source [MIT License](LICENSE).
 - Geodata & Mapping © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
+- Weather data provided by [Open-Meteo](https://open-meteo.com/) under CC BY 4.0.
+- Interoperability protocol aligns with the international [Open311 GeoReport v2](https://www.open311.org) specification.
 - Weather data provided by [Open-Meteo](https://open-meteo.com/) under CC BY 4.0.
 - Interoperability protocol aligns with the international [Open311 GeoReport v2](https://www.open311.org) specification.

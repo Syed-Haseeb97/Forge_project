@@ -10,6 +10,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const { user, isVerified } = useAuth()
   const [stats, setStats] = useState(null)
+  const [insights, setInsights] = useState(null)
   const [recent, setRecent] = useState([])
   const [criticalReports, setCriticalReports] = useState([])
   const [activeTab, setActiveTab] = useState('report') // 'report' | 'track'
@@ -31,13 +32,15 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [statsRes, reportsRes] = await Promise.all([
+        const [statsRes, reportsRes, insightsRes] = await Promise.all([
           axios.get('/api/stats'),
           axios.get('/api/reports', { params: { limit: 8 } }),
+          axios.get('/api/insights').catch(() => ({ data: null })),
         ])
         setStats(statsRes.data)
         setRecent(reportsRes.data)
         setCriticalReports(reportsRes.data.filter(r => r.severity === 'critical' || r.severity === 'high'))
+        if (insightsRes?.data) setInsights(insightsRes.data)
       } catch (err) {
         console.error('Failed to load dashboard metrics', err)
       }
@@ -544,6 +547,105 @@ export default function Dashboard() {
           </div>
         </div>
       </section>
+
+      {/* AI Civic Intelligence & Pulse Brief Section */}
+      {insights && (
+        <section className="rounded-[28px] border border-amber-300/40 dark:border-amber-500/20 bg-[#fffdfa] dark:bg-[#072124] p-6 sm:p-10 shadow-sm space-y-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-black/10 dark:border-white/10 pb-6">
+            <div className="flex items-center gap-3">
+              <div className="flex size-12 items-center justify-center rounded-2xl bg-[#0d3035] text-[#e8b855] shadow-xs">
+                <CivicIcon name="brain" size={24} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-[10px] font-bold tracking-[0.18em] uppercase text-[#ba7c29]">
+                    LIVE MUNICIPAL INTELLIGENCE
+                  </p>
+                  <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-bold">
+                    10m Live Cache
+                  </span>
+                </div>
+                <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+                  AI Civic Pulse Brief
+                </h2>
+              </div>
+            </div>
+
+            {/* Quick Metrics Pills */}
+            <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
+              <span className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-2 text-[#0d3035] dark:text-white">
+                {insights.total_reports} Logged Issues
+              </span>
+              <span className="rounded-xl border border-amber-200 dark:border-amber-900/30 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-amber-800 dark:text-amber-300">
+                {insights.hotspots?.length || 0} 300m Hotspots
+              </span>
+              <span className="rounded-xl border border-rose-200 dark:border-rose-900/30 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 text-rose-800 dark:text-rose-300">
+                {insights.overdue_count || 0} Overdue
+              </span>
+            </div>
+          </div>
+
+          {/* Brief Content */}
+          {insights.status === 'not_enough_data' || insights.brief === 'not enough data yet' ? (
+            <div className="p-6 rounded-2xl bg-slate-50 dark:bg-white/5 text-center text-xs text-slate-500">
+              Not enough data yet. Jan Aawaz requires at least 3 reported grievances to synthesize spatial hotspot clusters and compute departmental resolution velocity.
+            </div>
+          ) : (
+            <div className="grid gap-6 lg:grid-cols-[1.2fr_.8fr]">
+              {/* Executive Brief Text */}
+              <div className="space-y-4">
+                <p className="text-sm sm:text-base leading-relaxed text-[#2a4043] dark:text-[#cbd5e1] font-medium">
+                  {insights.brief}
+                </p>
+
+                {/* Hotspot Clusters Highlights */}
+                {insights.hotspots && insights.hotspots.length > 0 && (
+                  <div className="rounded-2xl border border-amber-200/60 dark:border-amber-900/30 bg-[#fff9ed] dark:bg-amber-950/20 p-4 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold text-amber-900 dark:text-amber-300">
+                      <span>Spatial 300m Clusters</span>
+                      <Link to="/reports" className="text-[11px] underline hover:text-[#0d3035]">
+                        View Map →
+                      </Link>
+                    </div>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {insights.hotspots.slice(0, 4).map((h, i) => (
+                        <span
+                          key={i}
+                          className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-white dark:bg-black/40 border border-amber-200 dark:border-amber-900/40 text-amber-900 dark:text-amber-200"
+                        >
+                          📍 {h.count}x {h.dominant_category.replace('_', ' ')}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 3 Recommended Priority Actions */}
+              <div className="space-y-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-[#0d3035] dark:text-[#e8b855]">
+                  Recommended Municipal Interventions
+                </p>
+                <div className="space-y-2.5">
+                  {insights.recommended_actions?.map((action, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-start gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white dark:bg-[#0b2529] p-3.5 shadow-xs"
+                    >
+                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#0d3035] text-[11px] font-bold text-[#e8b855]">
+                        {idx + 1}
+                      </span>
+                      <p className="text-xs leading-5 text-[#30484b] dark:text-[#e2e8f0] font-medium">
+                        {action}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Live Public Accountability Section */}
       <section id="accountability">

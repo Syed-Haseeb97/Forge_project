@@ -21,7 +21,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from database import engine, AsyncSessionLocal, Base
-from models import Report, ReportTimeline, Comment, Citizen, Dispatch, StatusEnum, SeverityEnum
+from models import Report, ReportTimeline, Comment, Citizen, Dispatch, Explanation, StatusEnum, SeverityEnum
 from gemini_service import analyze_report, ROUTING_MAP
 from storage_service import save_media, UPLOAD_DIR
 from agent.dispatch import draft_and_send_dispatch
@@ -32,6 +32,9 @@ from agent.watchdog import (
     get_sla_time_scale,
 )
 from agent.verification import verify_repair_evidence
+from agent.explainer import generate_plain_language_explanation
+from agent.insights import generate_civic_insights
+from agent.schemas import ExplanationOut
 from email_service import (
     generate_and_store_otp,
     verify_otp_code,
@@ -1026,6 +1029,84 @@ async def trigger_watchdog_run(
     """Authority trigger to immediately evaluate active dockets against SLA limits."""
     res = await run_watchdog_check()
     return res
+
+
+@app.post("/api/reports/{report_id}/explain", response_model=ExplanationOut)
+async def explain_report(
+    report_id: str,
+    lang: str = Query("en", description="Target language code: en, hi, ta, ml, te, kn, bn, mr"),
+):
+    """Generate or retrieve a cached plain-language explanation of a civic docket."""
+    valid_langs = {"en", "hi", "ta", "ml", "te", "kn", "bn", "mr"}
+    normalized_lang = lang.lower().strip()
+    if normalized_lang not in valid_langs:
+        raise HTTPException(400, f"Language '{lang}' not supported. Must be one of: {', '.join(sorted(valid_langs))}")
+
+    async with AsyncSessionLocal() as session:
+        # Check cache in DB table explanations
+        stmt = select(Explanation).where(
+            Explanation.report_id == report_id,
+            Explanation.lang == normalized_lang,
+        )
+        res = await session.execute(stmt)
+        cached_exp = res.scalars().first()
+        if cached_exp:
+            return ExplanationOut(
+                report_id=report_id,
+                lang=normalized_lang,
+                text=cached_exp.text,
+                cached=True,
+            )
+
+        # Fetch report from DB
+        r_stmt = select(Report).where(Report.id == report_id)
+        r_res = await session.execute(r_stmt)
+        report = r_res.scalar_one_or_none()
+        if not report:
+            raise HTTPException(404, "Report not found")
+
+        report_dict = {
+            "id": report.id,
+            "title": report.title,
+            "description": report.description,
+            "category": report.category,
+            "severity": report.severity.value if hasattr(report.severity, "value") else str(report.severity),
+            "status": report.status.value if hasattr(report.status, "value") else str(report.status),
+            "sla_hours": report.sla_hours,
+            "routed_to": report.routed_to,
+            "locality": report.locality or report.location,
+            "location": report.location,
+            "safety_precautions": report.safety_precautions,
+            "action_plan": report.action_plan,
+        }
+
+        explanation_text = await generate_plain_language_explanation(report_dict, normalized_lang)
+
+        # Cache in explanations table
+        new_exp = Explanation(
+            id=str(uuid.uuid4()),
+            report_id=report_id,
+            lang=normalized_lang,
+            text=explanation_text,
+            created_at=datetime.utcnow(),
+        )
+        session.add(new_exp)
+        await session.commit()
+
+        return ExplanationOut(
+            report_id=report_id,
+            lang=normalized_lang,
+            text=explanation_text,
+            cached=False,
+        )
+
+
+@app.get("/api/insights")
+async def get_insights(refresh: bool = Query(False, description="Force recomputation of insights")):
+    """Compute live 300m spatial clusters, department metrics, and Gemini civic brief."""
+    insights = await generate_civic_insights(force_refresh=refresh)
+    return insights
+
 
 
 @app.get("/api/stats", response_model=StatsOut)

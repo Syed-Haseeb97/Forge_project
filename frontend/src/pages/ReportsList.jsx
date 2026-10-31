@@ -23,6 +23,7 @@ const SEVERITIES = [
 
 export default function ReportsList() {
   const [reports, setReports] = useState([])
+  const [insights, setInsights] = useState(null)
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState({ status: '', severity: '', category: '', search: '' })
   const [viewMode, setViewMode] = useState('grid') // 'grid' | 'map'
@@ -39,8 +40,12 @@ export default function ReportsList() {
       if (filters.severity) params.severity = filters.severity
       if (filters.category) params.category = filters.category
       if (filters.search) params.search = filters.search
-      const { data } = await axios.get('/api/reports', { params })
-      setReports(data)
+      const [reportsRes, insightsRes] = await Promise.all([
+        axios.get('/api/reports', { params }),
+        axios.get('/api/insights').catch(() => ({ data: null })),
+      ])
+      setReports(reportsRes.data)
+      if (insightsRes?.data) setInsights(insightsRes.data)
     } catch {
       toast.error('Failed to query municipal registry')
     } finally {
@@ -317,7 +322,7 @@ export default function ReportsList() {
               </span>
             </div>
             <div className="overflow-hidden rounded-[26px] border border-[#173e42]/15 shadow-[0_20px_50px_rgba(27,52,51,.1)]">
-              <CivicMap reports={displayedReports} height="560px" />
+              <CivicMap reports={displayedReports} height="560px" hotspots={insights?.hotspots || []} />
             </div>
           </div>
         ) : (

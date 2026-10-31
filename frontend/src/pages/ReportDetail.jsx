@@ -17,6 +17,9 @@ import {
   Mail,
   CheckCircle2,
   XCircle,
+  Volume2,
+  VolumeX,
+  Languages,
 } from 'lucide-react'
 import CivicIcon from '../components/CivicIcon'
 import { isWatched, toggleWatchlist } from '../components/constants'
@@ -25,6 +28,17 @@ import CameraCapture from '../components/CameraCapture'
 import { useAuth } from '../components/AuthContext'
 
 const STATUSES = ['open', 'in_progress', 'resolved', 'closed']
+
+const SUPPORTED_LANGS = [
+  { code: 'en', label: 'English', native: 'English', voiceLang: 'en-IN' },
+  { code: 'hi', label: 'Hindi', native: 'हिन्दी', voiceLang: 'hi-IN' },
+  { code: 'ta', label: 'Tamil', native: 'தமிழ்', voiceLang: 'ta-IN' },
+  { code: 'ml', label: 'Malayalam', native: 'മലയാളം', voiceLang: 'ml-IN' },
+  { code: 'te', label: 'Telugu', native: 'తెలుగు', voiceLang: 'te-IN' },
+  { code: 'kn', label: 'Kannada', native: 'ಕನ್ನಡ', voiceLang: 'kn-IN' },
+  { code: 'bn', label: 'Bengali', native: 'বাংলা', voiceLang: 'bn-IN' },
+  { code: 'mr', label: 'Marathi', native: 'मराठी', voiceLang: 'mr-IN' },
+]
 
 export default function ReportDetail() {
   const { id } = useParams()
@@ -54,6 +68,13 @@ export default function ReportDetail() {
   const [resolveProofPreview, setResolveProofPreview] = useState(null)
   const [resolving, setResolving] = useState(false)
 
+  // Multilingual Plain-Language Explainer & Speech Synthesis state
+  const [selectedLang, setSelectedLang] = useState('en')
+  const [explanation, setExplanation] = useState('')
+  const [loadingExplanation, setLoadingExplanation] = useState(false)
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const speechSupported = typeof window !== 'undefined' && 'speechSynthesis' in window
+
   const loadData = async () => {
     try {
       const [rRes, tRes, cRes, dRes] = await Promise.all([
@@ -74,9 +95,60 @@ export default function ReportDetail() {
     }
   }
 
+  const fetchExplanation = async (langCode) => {
+    setLoadingExplanation(true)
+    if (speechSupported) {
+      window.speechSynthesis.cancel()
+      setIsSpeaking(false)
+    }
+    try {
+      const { data } = await axios.post(`/api/reports/${id}/explain?lang=${langCode}`)
+      setExplanation(data.text)
+    } catch (err) {
+      console.error('Failed to load plain-language explanation', err)
+      toast.error('Could not load explanation for selected language')
+    } finally {
+      setLoadingExplanation(false)
+    }
+  }
+
   useEffect(() => {
     loadData()
   }, [id])
+
+  useEffect(() => {
+    if (id) {
+      fetchExplanation(selectedLang)
+    }
+  }, [id, selectedLang])
+
+  // Cleanup speech synthesis on component unmount
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel()
+      }
+    }
+  }, [])
+
+  const handleToggleSpeech = () => {
+    if (!speechSupported || !explanation) return
+    if (isSpeaking) {
+      window.speechSynthesis.cancel()
+      setIsSpeaking(false)
+      return
+    }
+
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(explanation)
+    const currentLangObj = SUPPORTED_LANGS.find(l => l.code === selectedLang)
+    utterance.lang = currentLangObj?.voiceLang || 'en-IN'
+    utterance.rate = 0.95
+    utterance.onend = () => setIsSpeaking(false)
+    utterance.onerror = () => setIsSpeaking(false)
+    setIsSpeaking(true)
+    window.speechSynthesis.speak(utterance)
+  }
 
   const handleUpvote = async () => {
     try {
@@ -438,6 +510,97 @@ export default function ReportDetail() {
             </div>
           </div>
         </article>
+
+        {/* Multilingual Plain-Language Explainer (जन संवाद) */}
+        <div className="rounded-[26px] border border-teal-800/20 dark:border-teal-400/20 bg-[#f4f8f6] dark:bg-[#072428] p-6 sm:p-8 space-y-4 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-xl bg-[#0d3035] text-[#e8b855] shrink-0">
+                <Languages size={20} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-[10px] font-bold tracking-[0.16em] uppercase text-[#347061] dark:text-[#70b99e]">
+                    CITIZEN MULTILINGUAL EXPLAINER
+                  </p>
+                  <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-300 font-bold">
+                    जन संवाद
+                  </span>
+                </div>
+                <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+                  Plain-Language Docket Summary
+                </h2>
+              </div>
+            </div>
+
+            {/* Language Selector & Listen Button */}
+            <div className="flex items-center flex-wrap gap-2 sm:self-center">
+              <div className="relative">
+                <select
+                  value={selectedLang}
+                  onChange={(e) => setSelectedLang(e.target.value)}
+                  className="text-xs font-bold rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0b2529] text-slate-800 dark:text-slate-100 py-2 pl-3 pr-8 shadow-xs cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-[#0d3035]"
+                >
+                  {SUPPORTED_LANGS.map((lang) => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.native} ({lang.label})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {speechSupported && (
+                <button
+                  type="button"
+                  onClick={handleToggleSpeech}
+                  disabled={loadingExplanation || !explanation}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-xs ${
+                    isSpeaking
+                      ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse'
+                      : 'bg-[#0d3035] hover:bg-[#124249] text-[#e8b855]'
+                  }`}
+                  title={isSpeaking ? 'Stop voice playback' : 'Read aloud in selected language'}
+                >
+                  {isSpeaking ? (
+                    <>
+                      <VolumeX size={15} />
+                      <span>Stop Listening</span>
+                    </>
+                  ) : (
+                    <>
+                      <Volume2 size={15} />
+                      <span>Listen</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Explanation Text */}
+          <div className="rounded-xl border border-teal-800/15 dark:border-white/10 bg-white dark:bg-[#0b2529] p-5 text-sm leading-relaxed text-[#2a4043] dark:text-[#cbd5e1] space-y-3">
+            {loadingExplanation ? (
+              <div className="flex items-center gap-3 py-4 text-xs font-medium text-slate-500">
+                <div className="w-4 h-4 border-2 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+                <span>Translating and simplifying docket briefing into {SUPPORTED_LANGS.find(l => l.code === selectedLang)?.native || selectedLang}...</span>
+              </div>
+            ) : explanation ? (
+              <div className="space-y-3">
+                <p className="whitespace-pre-line font-medium leading-relaxed">
+                  {explanation}
+                </p>
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
+                  <span>Language: <strong className="text-slate-700 dark:text-slate-300">{SUPPORTED_LANGS.find(l => l.code === selectedLang)?.native}</strong></span>
+                  <span className="text-[10px] font-mono text-teal-700 dark:text-teal-400">Verified Jan Aawaz Ombudsman Brief</span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500 italic py-2">
+                Click a language above to generate a plain-language summary.
+              </p>
+            )}
+          </div>
+        </div>
 
         {/* Multimodal AI Technical Triage Card */}
         {report.ai_analysis && (

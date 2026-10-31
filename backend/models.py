@@ -115,3 +115,14 @@ class Dispatch(Base):
     sent = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
+class Explanation(Base):
+    __tablename__ = "explanations"
+
+    id = Column(String(36), primary_key=True)
+    report_id = Column(String(36), ForeignKey("reports.id", ondelete="CASCADE"), nullable=False, index=True)
+    lang = Column(String(10), nullable=False, index=True)  # en, hi, ta, ml, te, kn, bn, mr
+    text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+

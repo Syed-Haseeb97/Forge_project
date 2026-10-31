@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMapEvents, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import { Link } from 'react-router-dom'
 import { SEVERITY_COLORS, STATUS_COLORS } from './constants'
@@ -85,6 +85,8 @@ function ChangeView({ center, zoom }) {
 
 export default function CivicMap({
   reports = [],
+  hotspots = [],
+  hotspotCircles = null,
   selectedPosition = null,
   onPositionSelect = null,
   height = '420px',
@@ -92,6 +94,9 @@ export default function CivicMap({
   zoom = 13,
 }) {
   const validReports = reports.filter(r => r.latitude && r.longitude)
+  const activeHotspots = Array.isArray(hotspotCircles)
+    ? hotspotCircles
+    : (hotspots && hotspots.length > 0 ? hotspots : [])
 
   let defaultCenter = [28.6139, 77.2090]
   if (selectedPosition && selectedPosition[0] && selectedPosition[1]) {
@@ -150,6 +155,50 @@ export default function CivicMap({
             </Popup>
           </Marker>
         )}
+
+        {/* 300m Hotspot Cluster Overlays */}
+        {!interactivePicker &&
+          activeHotspots.map((h, idx) => (
+            <Circle
+              key={`hotspot-${idx}-${h.lat}-${h.lon}`}
+              center={[h.lat, h.lon]}
+              radius={h.radius_meters || 300}
+              pathOptions={{
+                color: '#e8b855',
+                fillColor: '#e8b855',
+                fillOpacity: 0.22,
+                weight: 2,
+                dashArray: '5, 5',
+              }}
+            >
+              <Popup>
+                <div className="p-1 min-w-[190px] max-w-[240px]">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                    <span className="text-[11px] font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wider font-mono">
+                      300m Civic Hotspot
+                    </span>
+                  </div>
+                  <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 mb-1">
+                    {h.count} Grievance{h.count > 1 ? 's' : ''} in Cluster
+                  </p>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-1.5">
+                    Dominant: <strong className="capitalize">{h.dominant_category?.replace('_', ' ')}</strong>
+                  </p>
+                  {h.sample_titles && h.sample_titles.length > 0 && (
+                    <div className="text-[10px] text-slate-500 border-t border-slate-200 dark:border-slate-700 pt-1 mt-1">
+                      <span className="font-medium text-slate-700 dark:text-slate-300">Cluster Samples:</span>
+                      <ul className="list-disc list-inside mt-0.5 space-y-0.5">
+                        {h.sample_titles.map((st, i) => (
+                          <li key={i} className="truncate text-slate-600 dark:text-slate-400">{st}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </Popup>
+            </Circle>
+          ))}
 
         {/* Reports markers (in viewer mode) */}
         {!interactivePicker &&

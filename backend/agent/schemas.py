@@ -137,3 +137,24 @@ class ResolutionVerification(BaseModel):
         description="Detailed visual comparison explaining whether the physical defect was remediated, unchanged, or taken at a different angle/location"
     )
 
+
+class CivicBriefDraft(BaseModel):
+    brief: str = Field(
+        ...,
+        description="Concise civic intelligence pulse brief synthesizing live counts, hotspots, and department bottlenecks. Must use only provided numbers."
+    )
+    recommended_actions: List[str] = Field(
+        ...,
+        min_items=3,
+        max_items=3,
+        description="Exactly 3 actionable, prioritized municipal interventions."
+    )
+
+
+class ExplanationOut(BaseModel):
+    report_id: str
+    lang: str
+    text: str
+    cached: bool = False
+
+

@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 from database import engine, AsyncSessionLocal, Base
 from models import Report, ReportTimeline, Comment, Citizen, Dispatch, Explanation, StatusEnum, SeverityEnum
 from gemini_service import analyze_report, ROUTING_MAP
-from storage_service import save_media, UPLOAD_DIR
+from storage_service import save_media, UPLOAD_DIR, get_storage_mode
 from agent.dispatch import draft_and_send_dispatch
 from agent.watchdog import (
     start_watchdog_background_task,
@@ -108,6 +108,7 @@ async def health_check():
         "app": "Jan Aawaz (जनAawaz)",
         "version": "2.0.0",
         "database": db_status,
+        "storage_mode": get_storage_mode(),
         "gemini_configured": bool(os.getenv("GEMINI_API_KEY")),
         "email_configured": is_email_configured(),
         "watchdog_running": is_watchdog_running(),

@@ -167,6 +167,9 @@ class ReportOut(BaseModel):
     locality: Optional[str] = None
     escalation_level: Optional[int] = 0
     is_overdue: Optional[bool] = False
+    demo_accel: Optional[bool] = False
+    triage_status: Optional[str] = "done"
+    needs_human_review: Optional[bool] = False
     resolution_verdict: Optional[str] = None
     resolution_confidence: Optional[float] = None
     resolution_explanation: Optional[str] = None
@@ -177,6 +180,18 @@ class ReportOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ReportTraceOut(BaseModel):
+    report_id: str
+    docket_no: Optional[str] = None
+    triage_status: str
+    severity: str
+    routed_to: Optional[str] = None
+    sla_hours: Optional[int] = None
+    agent_trace: List[Dict[str, Any]] = []
+    is_complete: bool
+    needs_human_review: bool = False
 
 
 class DispatchOut(BaseModel):
@@ -549,6 +564,104 @@ async def send_auth_code(payload: LoginSendCodeRequest):
     return await login_send_code(payload)
 
 
+# ── Background Pipeline Task ──────────────────────────────────────────────────
+async def run_background_triage(
+    report_id: str,
+    title: str,
+    description: str,
+    category: str,
+    location: str,
+    latitude: Optional[float],
+    longitude: Optional[float],
+    media_bytes: Optional[bytes],
+    media_mime: Optional[str],
+):
+    """Executes the multi-signal AI triage pipeline in background, streaming trace steps to DB."""
+    try:
+        async def on_step(step_data: Dict[str, Any]):
+            try:
+                async with AsyncSessionLocal() as s:
+                    rep = await s.get(Report, report_id)
+                    if rep:
+                        trace_list = json.loads(rep.agent_trace) if rep.agent_trace else []
+                        trace_list.append(step_data)
+                        rep.agent_trace = json.dumps(trace_list)
+                        if step_data.get("step") == "decide":
+                            dec_data = step_data.get("data", {})
+                            if dec_data.get("final_severity"):
+                                rep.severity = SeverityEnum(dec_data["final_severity"])
+                            if dec_data.get("department"):
+                                rep.routed_to = dec_data["department"]
+                            if dec_data.get("sla_hours"):
+                                rep.sla_hours = dec_data["sla_hours"]
+                        await s.commit()
+            except Exception as e:
+                logger.warning(f"Error persisting live trace step for {report_id}: {e}")
+
+        async with AsyncSessionLocal() as session:
+            analysis_res = await analyze_report(
+                title=title,
+                description=description,
+                category=category,
+                location=location,
+                latitude=latitude,
+                longitude=longitude,
+                media_bytes=media_bytes,
+                media_mime=media_mime,
+                db_session=session,
+                on_step=on_step,
+            )
+
+        async with AsyncSessionLocal() as session:
+            rep = await session.get(Report, report_id)
+            if rep:
+                severity_str = analysis_res.get("severity", "medium")
+                rep.severity = SeverityEnum(severity_str)
+                rep.routed_to = analysis_res.get("routed_to") or ROUTING_MAP.get(category, ROUTING_MAP["other"])
+                rep.action_plan = analysis_res.get("action_plan")
+                rep.safety_precautions = analysis_res.get("safety_precautions")
+                rep.sla_hours = analysis_res.get("sla_hours", 72)
+                rep.ai_analysis = analysis_res.get("ai_analysis")
+                rep.confidence = analysis_res.get("confidence")
+                rep.severity_rationale = analysis_res.get("severity_rationale")
+                rep.detected_language = analysis_res.get("detected_language")
+                rep.locality = analysis_res.get("locality") or location
+                
+                if analysis_res.get("needs_human_review"):
+                    rep.needs_human_review = True
+
+                agent_trace_data = analysis_res.get("agent_trace")
+                rep.agent_trace = json.dumps(agent_trace_data) if agent_trace_data else "[]"
+                rep.triage_status = "done"
+
+                await log_timeline(
+                    session=session,
+                    report_id=report_id,
+                    status=StatusEnum.open.value,
+                    actor="Jan Aawaz AI Triage",
+                    action_type="ai_triage",
+                    notes=f"Assessed as {severity_str.upper()} priority ({rep.sla_hours}h SLA). Routed to {rep.routed_to}. Rationale: {rep.severity_rationale or 'Evaluated based on multi-signal evidence'}",
+                )
+                await session.commit()
+
+        # The dispatch letter starts only when triage_status=done
+        try:
+            await draft_and_send_dispatch(report_id, "initial")
+        except Exception as e:
+            logger.warning(f"Error sending dispatch for {report_id}: {e}")
+
+    except Exception as e:
+        logger.error(f"Background triage failed for {report_id}: {e}", exc_info=True)
+        try:
+            async with AsyncSessionLocal() as session:
+                rep = await session.get(Report, report_id)
+                if rep:
+                    rep.triage_status = "failed"
+                    await session.commit()
+        except Exception:
+            pass
+
+
 # ── Core Routes ────────────────────────────────────────────────────────────────
 @app.post("/api/reports", response_model=ReportOut)
 async def submit_report(
@@ -582,36 +695,6 @@ async def submit_report(
 
     now = datetime.utcnow()
     async with AsyncSessionLocal() as session:
-        # AI multimodal analysis with live database session for recurrence check
-        analysis_res = await analyze_report(
-            title=title,
-            description=description,
-            category=category,
-            location=location,
-            latitude=latitude,
-            longitude=longitude,
-            media_path=str(UPLOAD_DIR / f"{report_id}{Path(media.filename).suffix}") if media and media.filename else None,
-            media_bytes=content if media and media.filename else None,
-            media_mime=media.content_type if media else None,
-            db_session=session,
-        )
-
-        severity_str = analysis_res.get("severity", "medium")
-        severity = SeverityEnum(severity_str)
-        routed_to = analysis_res.get("routed_to") or ROUTING_MAP.get(category, ROUTING_MAP["other"])
-        action_plan = analysis_res.get("action_plan")
-        safety_precautions = analysis_res.get("safety_precautions")
-        sla_hours = analysis_res.get("sla_hours", 72)
-        ai_analysis = analysis_res.get("ai_analysis")
-
-        # Serialized trace & new audit fields
-        agent_trace_data = analysis_res.get("agent_trace")
-        agent_trace_str = json.dumps(agent_trace_data) if agent_trace_data else None
-        confidence = analysis_res.get("confidence")
-        severity_rationale = analysis_res.get("severity_rationale")
-        detected_language = analysis_res.get("detected_language")
-        locality = analysis_res.get("locality") or location
-
         if not citizen_id and actual_citizen_email:
             res = await session.execute(select(Citizen).where(Citizen.email == actual_citizen_email.strip().lower()))
             cit = res.scalar_one_or_none()
@@ -630,6 +713,7 @@ async def submit_report(
         docket_no = f"JA-2026-{next_seq:05d}"
 
         is_demo_accel = DEV_MODE or (get_sla_time_scale() > 1.0)
+        default_dept = ROUTING_MAP.get(category, ROUTING_MAP["other"])
 
         report = Report(
             id=report_id,
@@ -642,53 +726,89 @@ async def submit_report(
             location=location,
             latitude=latitude,
             longitude=longitude,
-            severity=severity,
+            severity=SeverityEnum.medium,
             status=StatusEnum.open,
-            ai_analysis=ai_analysis,
-            action_plan=action_plan,
-            safety_precautions=safety_precautions,
-            sla_hours=sla_hours,
-            routed_to=routed_to,
+            triage_status="triaging",
+            needs_human_review=False,
+            ai_analysis="Autonomous AI multi-signal triage pipeline is analyzing evidence, GIS layers, weather, and recurrence...",
+            action_plan=None,
+            safety_precautions=None,
+            sla_hours=72,
+            routed_to=default_dept,
             upvotes=0,
             media_url=media_url,
-            agent_trace=agent_trace_str,
-            confidence=confidence,
-            severity_rationale=severity_rationale,
-            detected_language=detected_language,
-            locality=locality,
+            agent_trace="[]",
+            confidence=None,
+            severity_rationale=None,
+            detected_language="English",
+            locality=location,
             demo_accel=is_demo_accel,
             created_at=now,
             updated_at=now,
         )
         session.add(report)
 
-        # Log timeline events
+        # Log initial timeline event
         await log_timeline(
             session=session,
             report_id=report_id,
             status=StatusEnum.open.value,
             actor="Citizen Reporter",
             action_type="submitted",
-            notes=f"Civic grievance registered at {locality or location}.",
+            notes=f"Civic grievance registered at {location}. Initializing agentic triage pipeline.",
             media_url=media_url,
-        )
-
-        await log_timeline(
-            session=session,
-            report_id=report_id,
-            status=StatusEnum.open.value,
-            actor="Jan Aawaz AI Triage",
-            action_type="ai_triage",
-            notes=f"Assessed as {severity_str.upper()} priority ({sla_hours}h SLA). Routed to {routed_to}. Rationale: {severity_rationale or 'Evaluated based on multi-signal evidence'}",
         )
 
         await session.commit()
         await session.refresh(report)
 
-        # Schedule autonomous dispatch drafting & transmission in the background
-        background_tasks.add_task(draft_and_send_dispatch, report_id, "initial")
+        # Enqueue background triage pipeline
+        background_tasks.add_task(
+            run_background_triage,
+            report_id,
+            title,
+            description,
+            category,
+            location,
+            latitude,
+            longitude,
+            content,
+            media.content_type if media else None,
+        )
 
         return report
+
+
+@app.get("/api/reports/{report_id}/trace", response_model=ReportTraceOut)
+async def get_report_trace(report_id: str):
+    """Public endpoint to poll live agent trace steps as they stream in."""
+    async with AsyncSessionLocal() as session:
+        report = await session.get(Report, report_id)
+        if not report:
+            res = await session.execute(select(Report).where(Report.docket_no == report_id))
+            report = res.scalar_one_or_none()
+            if not report:
+                raise HTTPException(404, "Report not found")
+
+        trace_data = []
+        if report.agent_trace:
+            try:
+                trace_data = json.loads(report.agent_trace)
+            except Exception:
+                trace_data = []
+
+        sev_str = report.severity.value if hasattr(report.severity, "value") else str(report.severity)
+        return ReportTraceOut(
+            report_id=report.id,
+            docket_no=report.docket_no,
+            triage_status=report.triage_status or "done",
+            severity=sev_str,
+            routed_to=report.routed_to,
+            sla_hours=report.sla_hours,
+            agent_trace=trace_data,
+            is_complete=(report.triage_status in ["done", "failed"]),
+            needs_human_review=bool(report.needs_human_review),
+        )
 
 
 @app.post("/api/ai/prefill")

@@ -20,6 +20,7 @@ import {
   Volume2,
   VolumeX,
   Languages,
+  Loader2,
 } from 'lucide-react'
 import CivicIcon from '../components/CivicIcon'
 import { isWatched, toggleWatchlist } from '../components/constants'
@@ -115,6 +116,37 @@ export default function ReportDetail() {
   useEffect(() => {
     loadData()
   }, [id])
+
+  // Poll live trace if report is actively triaging
+  useEffect(() => {
+    if (!id || !report || report.triage_status !== 'triaging') return
+
+    const interval = setInterval(async () => {
+      try {
+        const { data } = await axios.get(`/api/reports/${id}/trace`)
+        setReport(prev => {
+          if (!prev) return prev
+          return {
+            ...prev,
+            triage_status: data.triage_status,
+            severity: data.severity || prev.severity,
+            routed_to: data.routed_to || prev.routed_to,
+            sla_hours: data.sla_hours || prev.sla_hours,
+            agent_trace: data.agent_trace,
+            needs_human_review: data.needs_human_review,
+          }
+        })
+        if (data.is_complete) {
+          clearInterval(interval)
+          loadData()
+        }
+      } catch (e) {
+        console.error('Error polling trace:', e)
+      }
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [id, report?.triage_status])
 
   useEffect(() => {
     if (id) {
@@ -418,8 +450,18 @@ export default function ReportDetail() {
             </div>
 
             {/* Badges */}
-            <div className="flex items-center gap-2 shrink-0">
-              {isCritical ? (
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {report.needs_human_review && isAuthority && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#fef3c7] dark:bg-[#2e230d] text-[#b45309] dark:text-[#fde68a] border border-[#f59e0b]/40 px-3 py-1 text-xs font-bold uppercase shadow-sm">
+                  <AlertTriangle size={13} /> AI IS UNSURE: HUMAN REVIEW RECOMMENDED
+                </span>
+              )}
+
+              {report.triage_status === 'triaging' ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#fef3c7] dark:bg-[#2e230d] text-[#b45309] dark:text-[#fde68a] border border-[#f59e0b]/40 px-3 py-1 text-xs font-bold uppercase animate-pulse">
+                  <Loader2 size={13} className="animate-spin" /> TRIAGING...
+                </span>
+              ) : isCritical ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-[#fce8e6] text-[#b04b37] border border-[#b04b37]/30 px-3 py-1 text-xs font-extrabold uppercase">
                   <CivicIcon name="alert" size={13} /> CRITICAL
                 </span>
@@ -651,7 +693,7 @@ export default function ReportDetail() {
         )}
 
         {/* Collapsible AI Reasoning Trace Card */}
-        {(report.agent_trace || report.severity_rationale) && (
+        {(report.agent_trace || report.severity_rationale || report.triage_status === 'triaging') && (
           <div className="rounded-[26px] border border-[#173e42]/15 dark:border-white/10 bg-white dark:bg-[#0b2529] p-6 sm:p-8 space-y-5 shadow-sm">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -687,6 +729,17 @@ export default function ReportDetail() {
 
             {showTrace && (
               <div className="space-y-4 pt-2">
+                {/* Live Triage Pulse State */}
+                {report.triage_status === 'triaging' && (
+                  <div className="flex items-center gap-3 p-3.5 rounded-xl border border-[#ba7c29]/30 bg-[#fffaf0] dark:bg-[#1a2522]">
+                    <Loader2 size={16} className="animate-spin text-[#ba7c29] shrink-0" />
+                    <div className="text-xs">
+                      <span className="font-bold text-[#ba7c29]">Live Multi-Signal Agent Triage in Progress: </span>
+                      <span className="text-[#556b68] dark:text-[#95a9a6]">Streaming steps concurrently... Severity, department and SLA will lock once decision agent finishes.</span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Confidence Bar */}
                 {report.confidence !== null && report.confidence !== undefined && (
                   <div className="rounded-xl border border-[#173e42]/10 dark:border-white/10 bg-[#f8f8f4] dark:bg-[#06181b] p-3.5 space-y-1.5">
@@ -734,6 +787,7 @@ export default function ReportDetail() {
                         const isFallback = step.status === 'fallback'
                         const isDegraded = step.status === 'degraded'
                         const isSuccess = step.status === 'success'
+                        const isWarning = step.status === 'warning'
                         const isError = step.status === 'error'
                         return (
                           <div key={idx} className="p-3.5 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -763,6 +817,8 @@ export default function ReportDetail() {
                               <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                                 isSuccess
                                   ? 'bg-[#e3f0ea] dark:bg-[#123830] text-[#2f7661] dark:text-[#70b99e]'
+                                  : isWarning
+                                  ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-400'
                                   : isDegraded
                                   ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/50'
                                   : isFallback
@@ -782,6 +838,26 @@ export default function ReportDetail() {
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Dispatch Pending State during Triage */}
+        {report.triage_status === 'triaging' && (!dispatches || dispatches.length === 0) && (
+          <div className="rounded-[26px] border border-[#173e42]/15 dark:border-white/10 bg-white dark:bg-[#0b2529] p-6 sm:p-8 space-y-3 shadow-sm text-center">
+            <div className="inline-flex size-10 items-center justify-center rounded-xl bg-[#0d3035] text-[#e8b855] mx-auto">
+              <Mail size={20} />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold tracking-[0.16em] uppercase text-[#ba7c29]">
+                DEPARTMENTAL DISPATCH
+              </p>
+              <h2 className="font-serif text-lg sm:text-xl font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+                Official Dispatch Letter Pending Triage Completion
+              </h2>
+            </div>
+            <p className="text-xs text-[#556b68] dark:text-[#95a9a6] max-w-lg mx-auto">
+              Official municipal notice and engineer dispatch letter will be generated autonomously and transmitted once the live AI triage pipeline concludes.
+            </p>
           </div>
         )}
 

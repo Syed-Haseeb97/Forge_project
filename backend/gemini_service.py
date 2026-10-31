@@ -112,6 +112,7 @@ async def analyze_report(
     media_bytes: Optional[bytes] = None,
     media_mime: Optional[str] = None,
     db_session=None,
+    on_step=None,
 ) -> Dict[str, Any]:
     """Execute the Jan Aawaz multi-signal agentic triage pipeline.
     
@@ -132,4 +133,5 @@ async def analyze_report(
         media_bytes=media_bytes,
         media_mime=media_mime,
         db_session=db_session,
+        on_step=on_step,
     )

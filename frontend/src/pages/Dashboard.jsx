@@ -106,6 +106,7 @@ export default function Dashboard() {
       const { data } = await axios.post('/api/reports', fd)
       setSubmittedReport(data)
       toast.success('Incident registered and triaged by AI')
+      navigate(`/reports/${data.id}`)
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Submission failed')
     } finally {

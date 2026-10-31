@@ -70,6 +70,8 @@ class Report(Base):
     escalation_level = Column(Integer, default=0)
     is_overdue = Column(Boolean, default=False)
     demo_accel = Column(Boolean, default=False, nullable=True)
+    triage_status = Column(String(30), default="done", nullable=True)  # "triaging" | "done" | "failed"
+    needs_human_review = Column(Boolean, default=False, nullable=True)
     # AI Resolution Verification
     resolution_verdict = Column(String(50), nullable=True)
     resolution_confidence = Column(Float, nullable=True)

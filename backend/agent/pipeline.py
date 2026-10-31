@@ -14,7 +14,7 @@ import time
 import json
 import asyncio
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Callable, Awaitable
 from google import genai
 from google.genai import types
 
@@ -137,6 +137,7 @@ async def run_agent_pipeline(
     media_bytes: Optional[bytes] = None,
     media_mime: Optional[str] = None,
     db_session=None,
+    on_step: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None,
 ) -> Dict[str, Any]:
     """Execute the full agentic civic grievance triage pipeline within a 30s budget."""
     try:
@@ -151,12 +152,13 @@ async def run_agent_pipeline(
                 media_bytes=media_bytes,
                 media_mime=media_mime,
                 db_session=db_session,
+                on_step=on_step,
             ),
             timeout=30.0,
         )
     except asyncio.TimeoutError:
         logger.warning(f"run_agent_pipeline timed out after 30s budget for report '{title}'")
-        return _fallback_triage_result(
+        fallback_res = _fallback_triage_result(
             title=title,
             category=category,
             description=description,
@@ -164,6 +166,13 @@ async def run_agent_pipeline(
             latitude=latitude,
             longitude=longitude,
         )
+        if on_step and fallback_res.get("agent_trace"):
+            for s in fallback_res["agent_trace"]:
+                try:
+                    await on_step(s)
+                except Exception:
+                    pass
+        return fallback_res
 
 
 async def _execute_agent_pipeline(
@@ -176,6 +185,7 @@ async def _execute_agent_pipeline(
     media_bytes: Optional[bytes] = None,
     media_mime: Optional[str] = None,
     db_session=None,
+    on_step: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None,
 ) -> Dict[str, Any]:
     """Internal step execution for the agentic triage pipeline."""
     trace: List[Dict[str, Any]] = []
@@ -231,7 +241,7 @@ async def _execute_agent_pipeline(
                 dur = int((time.time() - t_sub0) * 1000)
                 if resp.text:
                     evidence_res = EvidenceAnalysis.model_validate_json(resp.text)
-                    trace.append({
+                    step_data = {
                         "step": "understand_evidence",
                         "tool": f"gemini_multimodal ({model_name})",
                         "status": "success",
@@ -242,7 +252,10 @@ async def _execute_agent_pipeline(
                             f"Hazards: {len(evidence_res.visible_hazards)})"
                         ),
                         "data": evidence_res.model_dump(),
-                    })
+                    }
+                    trace.append(step_data)
+                    if on_step:
+                        await on_step(step_data)
                     break
             except Exception as e:
                 logger.warning(f"understand_evidence failed on {model_name}: {e}")
@@ -259,123 +272,147 @@ async def _execute_agent_pipeline(
             evidence_severity="medium",
             confidence=0.7,
         )
-        trace.append({
+        step_data = {
             "step": "understand_evidence",
             "tool": "heuristic_parser",
             "status": "fallback" if client else "skipped",
             "duration_ms": dur,
             "summary": f"Initial evidence parsed via text heuristics ({evidence_res.evidence_severity.upper()})",
             "data": evidence_res.model_dump(),
-        })
+        }
+        trace.append(step_data)
+        if on_step:
+            await on_step(step_data)
 
     # -------------------------------------------------------------
-    # Step 2: reverse_geocode (Nominatim reverse API)
+    # Parallel Tools Execution: reverse_geocode, weather, sensitive_sites, recurrence
     # -------------------------------------------------------------
-    t0 = time.time()
-    try:
-        geocode_res = await reverse_geocode(latitude, longitude)
-        dur = int((time.time() - t0) * 1000)
-        loc_str = geocode_res.get("locality") or geocode_res.get("road") or geocode_res.get("city") or location
-        status = "degraded" if geocode_res.get("degraded") else ("success" if geocode_res.get("locality") or geocode_res.get("city") else "skipped")
-        trace.append({
-            "step": "reverse_geocode",
-            "tool": "nominatim_osm",
-            "status": status,
-            "duration_ms": dur,
-            "summary": f"Resolved location to {loc_str}" if not geocode_res.get("degraded") else "Reverse geocoding unavailable",
-            "data": geocode_res,
-        })
-    except Exception as e:
-        dur = int((time.time() - t0) * 1000)
-        trace.append({
-            "step": "reverse_geocode",
-            "tool": "nominatim_osm",
-            "status": "degraded",
-            "duration_ms": dur,
-            "summary": f"Geocoding degraded: {e}",
-            "data": {"locality": None, "degraded": True},
-        })
+    async def _run_tool_geocode():
+        t0 = time.time()
+        try:
+            res = await reverse_geocode(latitude, longitude)
+            dur = int((time.time() - t0) * 1000)
+            loc_str = res.get("locality") or res.get("road") or res.get("city") or location
+            status = "degraded" if res.get("degraded") else ("success" if res.get("locality") or res.get("city") else "skipped")
+            step = {
+                "step": "reverse_geocode",
+                "tool": "nominatim_osm",
+                "status": status,
+                "duration_ms": dur,
+                "summary": f"Resolved location to {loc_str}" if not res.get("degraded") else "Reverse geocoding unavailable",
+                "data": res,
+            }
+            return res, step
+        except Exception as e:
+            dur = int((time.time() - t0) * 1000)
+            step = {
+                "step": "reverse_geocode",
+                "tool": "nominatim_osm",
+                "status": "degraded",
+                "duration_ms": dur,
+                "summary": f"Geocoding degraded: {e}",
+                "data": {"locality": None, "degraded": True},
+            }
+            return {"locality": None, "degraded": True}, step
 
-    # -------------------------------------------------------------
-    # Step 3: weather (Open-Meteo forecast API)
-    # -------------------------------------------------------------
-    t0 = time.time()
-    try:
-        weather_res = await get_weather(latitude, longitude)
-        dur = int((time.time() - t0) * 1000)
-        status = "degraded" if weather_res.get("degraded") else "success"
-        trace.append({
-            "step": "weather",
-            "tool": "open_meteo",
-            "status": status,
-            "duration_ms": dur,
-            "summary": weather_res.get("summary", "Weather checked"),
-            "data": weather_res,
-        })
-    except Exception as e:
-        dur = int((time.time() - t0) * 1000)
-        trace.append({
-            "step": "weather",
-            "tool": "open_meteo",
-            "status": "degraded",
-            "duration_ms": dur,
-            "summary": f"Weather fetch degraded: {e}",
-            "data": weather_res,
-        })
+    async def _run_tool_weather():
+        t0 = time.time()
+        try:
+            res = await get_weather(latitude, longitude)
+            dur = int((time.time() - t0) * 1000)
+            status = "degraded" if res.get("degraded") else "success"
+            step = {
+                "step": "weather",
+                "tool": "open_meteo",
+                "status": status,
+                "duration_ms": dur,
+                "summary": res.get("summary", "Weather checked"),
+                "data": res,
+            }
+            return res, step
+        except Exception as e:
+            dur = int((time.time() - t0) * 1000)
+            step = {
+                "step": "weather",
+                "tool": "open_meteo",
+                "status": "degraded",
+                "duration_ms": dur,
+                "summary": f"Weather fetch degraded: {e}",
+                "data": {"degraded": True},
+            }
+            return {"degraded": True, "summary": "Weather data temporarily unavailable"}, step
 
-    # -------------------------------------------------------------
-    # Step 4: sensitive_sites (Overpass API, 250m)
-    # -------------------------------------------------------------
-    t0 = time.time()
-    try:
-        sites_res = await get_sensitive_sites(latitude, longitude, radius_m=250)
-        dur = int((time.time() - t0) * 1000)
-        status = "degraded" if sites_res.get("degraded") else ("success" if sites_res.get("count", 0) > 0 else "skipped")
-        trace.append({
-            "step": "sensitive_sites",
-            "tool": "overpass_osm",
-            "status": status,
-            "duration_ms": dur,
-            "summary": sites_res.get("summary", "Sensitive sites evaluated"),
-            "data": sites_res,
-        })
-    except Exception as e:
-        dur = int((time.time() - t0) * 1000)
-        trace.append({
-            "step": "sensitive_sites",
-            "tool": "overpass_osm",
-            "status": "degraded",
-            "duration_ms": dur,
-            "summary": f"Sensitive sites scan degraded: {e}",
-            "data": sites_res,
-        })
+    async def _run_tool_sensitive_sites():
+        t0 = time.time()
+        try:
+            res = await get_sensitive_sites(latitude, longitude, radius_m=250)
+            dur = int((time.time() - t0) * 1000)
+            status = "degraded" if res.get("degraded") else ("success" if res.get("count", 0) > 0 else "skipped")
+            step = {
+                "step": "sensitive_sites",
+                "tool": "overpass_osm",
+                "status": status,
+                "duration_ms": dur,
+                "summary": res.get("summary", "Sensitive sites evaluated"),
+                "data": res,
+            }
+            return res, step
+        except Exception as e:
+            dur = int((time.time() - t0) * 1000)
+            step = {
+                "step": "sensitive_sites",
+                "tool": "overpass_osm",
+                "status": "degraded",
+                "duration_ms": dur,
+                "summary": f"Sensitive sites scan degraded: {e}",
+                "data": {"count": 0, "degraded": True},
+            }
+            return {"count": 0, "degraded": True, "summary": "Sensitive sites lookup timed out"}, step
 
-    # -------------------------------------------------------------
-    # Step 5: recurrence (Database nearby open reports within 300m)
-    # -------------------------------------------------------------
-    t0 = time.time()
-    try:
-        recurrence_res = await get_recurrence(latitude, longitude, category, session=db_session, radius_m=300)
-        dur = int((time.time() - t0) * 1000)
-        status = "degraded" if recurrence_res.get("degraded") else "success"
-        trace.append({
-            "step": "recurrence",
-            "tool": "municipal_database",
-            "status": status,
-            "duration_ms": dur,
-            "summary": recurrence_res.get("summary", "Recurrence evaluated"),
-            "data": recurrence_res,
-        })
-    except Exception as e:
-        dur = int((time.time() - t0) * 1000)
-        trace.append({
-            "step": "recurrence",
-            "tool": "municipal_database",
-            "status": "degraded",
-            "duration_ms": dur,
-            "summary": f"Recurrence lookup degraded: {e}",
-            "data": recurrence_res,
-        })
+    async def _run_tool_recurrence():
+        t0 = time.time()
+        try:
+            res = await get_recurrence(latitude, longitude, category, session=db_session, radius_m=300)
+            dur = int((time.time() - t0) * 1000)
+            status = "degraded" if res.get("degraded") else "success"
+            step = {
+                "step": "recurrence",
+                "tool": "municipal_database",
+                "status": status,
+                "duration_ms": dur,
+                "summary": res.get("summary", "Recurrence evaluated"),
+                "data": res,
+            }
+            return res, step
+        except Exception as e:
+            dur = int((time.time() - t0) * 1000)
+            step = {
+                "step": "recurrence",
+                "tool": "municipal_database",
+                "status": "degraded",
+                "duration_ms": dur,
+                "summary": f"Recurrence lookup degraded: {e}",
+                "data": {"count": 0, "degraded": True},
+            }
+            return {"count": 0, "degraded": True, "summary": "Recurrence check unavailable"}, step
+
+    # Concurrently execute tools with asyncio.gather
+    geo_out, weather_out, sites_out, recurrence_out = await asyncio.gather(
+        _run_tool_geocode(),
+        _run_tool_weather(),
+        _run_tool_sensitive_sites(),
+        _run_tool_recurrence(),
+    )
+
+    geocode_res, geocode_step = geo_out
+    weather_res, weather_step = weather_out
+    sites_res, sites_step = sites_out
+    recurrence_res, recurrence_step = recurrence_out
+
+    for s in [geocode_step, weather_step, sites_step, recurrence_step]:
+        trace.append(s)
+        if on_step:
+            await on_step(s)
 
     # -------------------------------------------------------------
     # Step 6: decide (Gemini structured triage decision)
@@ -434,14 +471,17 @@ async def _execute_agent_pipeline(
                         decision_res.final_severity = clamped_sev
                         decision_res.sla_hours = DEFAULT_SLA_MAP.get(clamped_sev, decision_res.sla_hours)
 
-                    trace.append({
+                    step_data = {
                         "step": "decide",
                         "tool": f"gemini_decision_agent ({model_name})",
                         "status": "success",
                         "duration_ms": dur,
                         "summary": f"Assigned final {decision_res.final_severity.upper()} severity ({decision_res.sla_hours}h SLA) to {decision_res.department}",
                         "data": decision_res.model_dump(),
-                    })
+                    }
+                    trace.append(step_data)
+                    if on_step:
+                        await on_step(step_data)
                     break
             except Exception as e:
                 logger.warning(f"decide failed on {model_name}: {e}")
@@ -481,14 +521,17 @@ async def _execute_agent_pipeline(
             confidence=0.75,
         )
 
-        trace.append({
+        step_data = {
             "step": "decide",
             "tool": "heuristic_fallback_agent",
             "status": "fallback",
             "duration_ms": dur,
             "summary": f"Fallback rule evaluation: {decision_res.final_severity.upper()} priority ({decision_res.sla_hours}h SLA)",
             "data": decision_res.model_dump(),
-        })
+        }
+        trace.append(step_data)
+        if on_step:
+            await on_step(step_data)
 
     # Compile unified analysis text: evidence summary plus rationale and action plan
     full_analysis = (

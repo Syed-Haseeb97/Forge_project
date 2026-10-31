@@ -1,10 +1,11 @@
 """
-Fordge – Transparent Civic Grievance & Infrastructure Triage System
+Jan Aawaz (जनAawaz) – Autonomous Civic Grievance & Infrastructure Redressal System
 Backend: FastAPI + SQLite + Gemini API + Open311 GeoReport v2
 """
 import os
 import json
 import math
+import time
 import uuid
 import csv
 import io
@@ -13,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Response, Depends, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Response, Depends, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -21,7 +22,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from database import engine, AsyncSessionLocal, Base
-from models import Report, ReportTimeline, Comment, Citizen, Dispatch, Explanation, StatusEnum, SeverityEnum
+from models import Report, ReportTimeline, Comment, Citizen, Dispatch, Explanation, Upvote, StatusEnum, SeverityEnum
 from gemini_service import analyze_report, ROUTING_MAP
 from storage_service import save_media, UPLOAD_DIR, get_storage_mode
 from agent.dispatch import draft_and_send_dispatch
@@ -58,6 +59,26 @@ from sqlalchemy import select, text
 load_dotenv()
 
 DEV_MODE = os.getenv("DEV_MODE", "false").lower() in ("true", "1", "yes")
+
+# In-memory per-IP rate limiting: ip -> List[timestamp]
+_IP_RATE_LIMITS: Dict[str, List[float]] = {}
+_IP_RATE_LIMIT_LOCK = asyncio.Lock()
+
+
+async def check_ip_rate_limit(request: Request, limit: int = 30, window_secs: float = 60.0):
+    client_ip = request.client.host if request and request.client else "unknown"
+    now = time.time()
+    async with _IP_RATE_LIMIT_LOCK:
+        times = _IP_RATE_LIMITS.setdefault(client_ip, [])
+        times = [t for t in times if now - t < window_secs]
+        if len(times) >= limit:
+            _IP_RATE_LIMITS[client_ip] = times
+            raise HTTPException(
+                status_code=429,
+                detail=f"Too Many Requests: rate limit of {limit} requests/min exceeded. Please slow down.",
+            )
+        times.append(now)
+        _IP_RATE_LIMITS[client_ip] = times
 
 # ── App setup ─────────────────────────────────────────────────────────────────
 app = FastAPI(
@@ -552,9 +573,11 @@ async def submit_report(
 
     # Save uploaded media (Supabase storage or local disk)
     if media and media.filename:
+        content = await media.read()
+        if len(content) > 10 * 1024 * 1024:
+            raise HTTPException(413, "File size exceeds maximum allowed limit (10 MB)")
         ext = Path(media.filename).suffix or ".jpg"
         filename = f"{report_id}{ext}"
-        content = await media.read()
         media_url = await save_media(filename, content, media.content_type)
 
     now = datetime.utcnow()
@@ -667,17 +690,21 @@ async def submit_report(
 
 @app.post("/api/ai/prefill")
 async def ai_prefill(
+    request: Request,
     media: Optional[UploadFile] = File(None),
     text: Optional[str] = Form(None),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Analyze attached photo/audio/notes and return suggested title, category, description, and language."""
+    await check_ip_rate_limit(request, limit=20, window_secs=60.0)
     from agent.pipeline import prefill_from_media
 
     media_bytes = None
     media_mime = None
     if media and media.filename:
         media_bytes = await media.read()
+        if len(media_bytes) > 10 * 1024 * 1024:
+            raise HTTPException(413, "File size exceeds maximum allowed limit (10 MB)")
         media_mime = media.content_type
 
     res = await prefill_from_media(
@@ -806,7 +833,7 @@ async def export_reports(
                 r.resolution_notes or "",
             ])
         output.seek(0)
-        filename = f"fordge_civic_reports_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+        filename = f"janaawaz_civic_reports_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
         return StreamingResponse(
             io.BytesIO(output.getvalue().encode("utf-8")),
             media_type="text/csv",
@@ -967,6 +994,8 @@ async def resolve_report_with_proof(
         ext = Path(media.filename).suffix or ".jpg"
         filename = f"resolved_{report_id}{ext}"
         content = await media.read()
+        if len(content) > 10 * 1024 * 1024:
+            raise HTTPException(413, "File size exceeds maximum allowed limit (10 MB)")
         resolved_media_url = await save_media(filename, content, media.content_type)
         report.resolved_media_url = resolved_media_url
 
@@ -1038,11 +1067,36 @@ async def upvote_report(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     from sqlalchemy import select
+    from models import Upvote
+    user_email = current_user.get("sub") or current_user.get("email")
+    if not user_email:
+        raise HTTPException(401, "Citizen authentication required to upvote")
+
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(Report).where(Report.id == report_id))
         report = result.scalar_one_or_none()
         if not report:
             raise HTTPException(404, "Report not found")
+
+        # Enforce one upvote per user per report
+        existing_upvote = (
+            await session.execute(
+                select(Upvote).where(
+                    Upvote.report_id == report_id,
+                    Upvote.user_email == user_email.strip().lower(),
+                )
+            )
+        ).scalar_one_or_none()
+
+        if existing_upvote:
+            raise HTTPException(400, "Already upvoted this report")
+
+        new_upvote = Upvote(
+            id=str(uuid.uuid4()),
+            report_id=report_id,
+            user_email=user_email.strip().lower(),
+        )
+        session.add(new_upvote)
         report.upvotes += 1
         report.updated_at = datetime.utcnow()
         await session.commit()
@@ -1120,9 +1174,11 @@ async def trigger_watchdog_run(
 @app.post("/api/reports/{report_id}/explain", response_model=ExplanationOut)
 async def explain_report(
     report_id: str,
+    request: Request,
     lang: str = Query("en", description="Target language code: en, hi, ta, ml, te, kn, bn, mr"),
 ):
     """Generate or retrieve a cached plain-language explanation of a civic docket."""
+    await check_ip_rate_limit(request, limit=30, window_secs=60.0)
     valid_langs = {"en", "hi", "ta", "ml", "te", "kn", "bn", "mr"}
     normalized_lang = lang.lower().strip()
     if normalized_lang not in valid_langs:
@@ -1188,8 +1244,19 @@ async def explain_report(
 
 
 @app.get("/api/insights")
-async def get_insights(refresh: bool = Query(False, description="Force recomputation of insights")):
+async def get_insights(
+    request: Request,
+    refresh: bool = Query(False, description="Force recomputation of insights"),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user),
+):
     """Compute live 300m spatial clusters, department metrics, and Gemini civic brief."""
+    await check_ip_rate_limit(request, limit=30, window_secs=60.0)
+    if refresh:
+        if not current_user or current_user.get("role") != "authority":
+            raise HTTPException(
+                status_code=403,
+                detail="Refreshing civic insights requires municipal authority credentials.",
+            )
     insights = await generate_civic_insights(force_refresh=refresh)
     return insights
 

@@ -75,6 +75,13 @@ def test_authority_auth_guard_rejects_citizens(client, citizen_headers, authorit
     res_citizen_watchdog = client.post("/api/admin/watchdog/run", headers=citizen_headers)
     assert res_citizen_watchdog.status_code == 403
 
+    # GET /api/insights?refresh=true requires authority
+    res_unauth_insights_refresh = client.get("/api/insights?refresh=true")
+    assert res_unauth_insights_refresh.status_code == 403
+
+    res_citizen_insights_refresh = client.get("/api/insights?refresh=true", headers=citizen_headers)
+    assert res_citizen_insights_refresh.status_code == 403
+
     # Authority token allows watchdog execution
     res_auth_watchdog = client.post("/api/admin/watchdog/run", headers=authority_headers)
     assert res_auth_watchdog.status_code == 200

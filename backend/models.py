@@ -1,7 +1,7 @@
 """SQLAlchemy ORM models"""
 import enum
 from datetime import datetime
-from sqlalchemy import Column, String, Float, Integer, DateTime, Text, Boolean, Enum as SAEnum, ForeignKey
+from sqlalchemy import Column, String, Float, Integer, DateTime, Text, Boolean, Enum as SAEnum, ForeignKey, UniqueConstraint
 from database import Base
 
 
@@ -69,6 +69,7 @@ class Report(Base):
     # SLA Watchdog & Escalation
     escalation_level = Column(Integer, default=0)
     is_overdue = Column(Boolean, default=False)
+    demo_accel = Column(Boolean, default=False, nullable=True)
     # AI Resolution Verification
     resolution_verdict = Column(String(50), nullable=True)
     resolution_confidence = Column(Float, nullable=True)
@@ -124,6 +125,18 @@ class Explanation(Base):
     report_id = Column(String(36), ForeignKey("reports.id", ondelete="CASCADE"), nullable=False, index=True)
     lang = Column(String(10), nullable=False, index=True)  # en, hi, ta, ml, te, kn, bn, mr
     text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Upvote(Base):
+    __tablename__ = "upvotes"
+    __table_args__ = (
+        UniqueConstraint("report_id", "user_email", name="uq_upvote_report_user"),
+    )
+
+    id = Column(String(36), primary_key=True)
+    report_id = Column(String(36), ForeignKey("reports.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_email = Column(String(255), nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

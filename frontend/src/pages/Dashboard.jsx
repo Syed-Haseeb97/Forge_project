@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
 import { Link, useNavigate } from 'react-router-dom'
+import { ListOrdered, Users, Sparkles, Clock, AlertTriangle, ArrowRight } from 'lucide-react'
 import CivicIcon from '../components/CivicIcon'
 import { CATEGORIES } from '../components/constants'
 import { useAuth } from '../components/AuthContext'
@@ -12,6 +13,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null)
   const [insights, setInsights] = useState(null)
   const [healthInfo, setHealthInfo] = useState(null)
+  const [authorityQueue, setAuthorityQueue] = useState(null)
   const [recent, setRecent] = useState([])
   const [criticalReports, setCriticalReports] = useState([])
   const [activeTab, setActiveTab] = useState('report') // 'report' | 'track'
@@ -47,6 +49,12 @@ export default function Dashboard() {
         setCriticalReports(reportsRes.data.filter(r => r.severity === 'critical' || r.severity === 'high'))
         if (insightsRes?.data) setInsights(insightsRes.data)
         if (healthRes?.data) setHealthInfo(healthRes.data)
+
+        if (isAuthority) {
+          axios.get('/api/authority/queue')
+            .then(res => setAuthorityQueue(res.data))
+            .catch(err => console.warn('Could not load authority queue:', err))
+        }
       } catch (err) {
         console.error('Failed to load dashboard metrics', err)
       }
@@ -639,6 +647,161 @@ export default function Dashboard() {
           </div>
         </div>
       </section>
+
+      {/* Authority Priority Queue Card (Authority View Only) */}
+      {isAuthority && authorityQueue && (
+        <section className="rounded-[28px] border border-[#ba7c29]/40 bg-white dark:bg-[#072124] p-6 sm:p-10 shadow-sm space-y-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-black/10 dark:border-white/10 pb-6">
+            <div className="flex items-center gap-3">
+              <div className="flex size-12 items-center justify-center rounded-2xl bg-[#0d3035] text-[#e8b855] shadow-xs">
+                <ListOrdered size={24} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-[10px] font-bold tracking-[0.18em] uppercase text-[#ba7c29]">
+                    OFFICIAL DISPATCH QUEUE
+                  </p>
+                  <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-[#e3f0ea] dark:bg-[#123830] text-[#2f7661] dark:text-[#70b99e] font-bold">
+                    {authorityQueue.total_queued} Open Tickets Ranked
+                  </span>
+                </div>
+                <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+                  Priority Dispatch Queue
+                </h2>
+              </div>
+            </div>
+
+            <p className="text-xs text-[#556b68] dark:text-[#95a9a6] max-w-md">
+              Transparent multi-signal score: severity weight (100/60/30/10), statutory SLA urgency (+50/30/15), citizen endorsements, 300m cluster density (+20), and heavy rain risk (+15).
+            </p>
+          </div>
+
+          {/* Suggested 300m Crew Dispatch Batches */}
+          {authorityQueue.crew_batches && authorityQueue.crew_batches.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-[#ba7c29] uppercase tracking-wider">
+                <Users size={15} />
+                <span>Suggested Crew Batches ({authorityQueue.crew_batches.length} Clusters within 300m)</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {authorityQueue.crew_batches.map((batch) => (
+                  <div
+                    key={batch.batch_id}
+                    className="rounded-xl border border-[#ba7c29]/25 bg-[#fffaf0] dark:bg-[#0d2a2d] p-4 space-y-2 text-xs"
+                  >
+                    <div className="flex items-center justify-between font-bold">
+                      <span className="font-mono text-[#0d3035] dark:text-[#e8b855]">{batch.batch_id}</span>
+                      <span className="rounded-full bg-[#0d3035] text-[#e8b855] px-2 py-0.5 text-[10px]">
+                        {batch.ticket_count} tickets
+                      </span>
+                    </div>
+                    <p className="text-[#3b4e4c] dark:text-[#cad8d5] font-medium truncate">
+                      📍 {batch.center_location}
+                    </p>
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {batch.dockets.map((doc) => (
+                        <span key={doc} className="font-mono text-[9px] bg-white dark:bg-[#06181b] border border-black/10 dark:border-white/10 px-1.5 py-0.5 rounded">
+                          {doc}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Top Ranked Tickets */}
+          <div className="space-y-3">
+            <p className="text-[10px] font-bold tracking-wider uppercase text-[#718481] dark:text-[#8ea5a2]">
+              Ranked Incident Priority List
+            </p>
+            <div className="divide-y divide-black/10 dark:divide-white/10 rounded-2xl border border-black/10 dark:border-white/10 bg-[#f8f8f4] dark:bg-[#06181b] overflow-hidden">
+              {authorityQueue.items.slice(0, 5).map((item, idx) => (
+                <div key={item.id} className="p-4 sm:p-5 text-xs space-y-3 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-3">
+                      <span className="flex size-7 items-center justify-center rounded-lg bg-[#0d3035] text-[#e8b855] font-mono text-[11px] font-bold shrink-0">
+                        #{idx + 1}
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[11px] font-bold text-[#ba7c29]">
+                            {item.docket_no || item.id.slice(0, 8)}
+                          </span>
+                          <span className="text-black/30 dark:text-white/30">•</span>
+                          <span className="font-semibold text-[#0d3035] dark:text-[#f6f4ee]">
+                            {item.title}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-[#718481] dark:text-[#8ea5a2] mt-0.5">
+                          {item.location} · {item.category.replace('_', ' ').toUpperCase()}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                      <span className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase ${
+                        item.severity === 'critical'
+                          ? 'bg-[#fce8e6] text-[#b04b37]'
+                          : item.severity === 'high'
+                          ? 'bg-[#fff4dd] text-[#956018]'
+                          : 'bg-[#f0f4f3] text-[#556e6b]'
+                      }`}>
+                        {item.severity}
+                      </span>
+                      <span className="font-mono text-xs font-extrabold rounded-full bg-[#0d3035] text-[#e8b855] px-3 py-1">
+                        {item.score} pts
+                      </span>
+                      <Link
+                        to={`/reports/${item.id}`}
+                        className="inline-flex items-center gap-1 rounded-full border border-black/15 dark:border-white/15 px-3 py-1 text-[11px] font-bold text-[#0d3035] dark:text-[#f6f4ee] hover:bg-[#ba7c29] hover:text-white transition"
+                      >
+                        <span>Dispatch</span>
+                        <ArrowRight size={12} />
+                      </Link>
+                    </div>
+                  </div>
+
+                  {/* Score breakdown tags */}
+                  <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono text-[#556b68] dark:text-[#95a9a6]">
+                    <span className="bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded">
+                      Severity: +{item.score_breakdown.severity_pts}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded ${item.is_overdue ? 'bg-red-100 text-red-800 font-bold' : 'bg-black/5 dark:bg-white/10'}`}>
+                      SLA: +{item.score_breakdown.sla_pts} ({item.is_overdue ? 'OVERDUE' : `${item.sla_remaining_hours}h left`})
+                    </span>
+                    <span className="bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded">
+                      Endorsements: +{item.score_breakdown.upvote_pts} ({item.upvotes} votes)
+                    </span>
+                    {item.score_breakdown.hotspot_pts > 0 && (
+                      <span className="bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-bold px-2 py-0.5 rounded">
+                        Hotspot: +{item.score_breakdown.hotspot_pts}
+                      </span>
+                    )}
+                    {item.score_breakdown.rain_pts > 0 && (
+                      <span className="bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 font-bold px-2 py-0.5 rounded">
+                        Rain: +{item.score_breakdown.rain_pts}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* AI Why Now Rationale */}
+                  {item.why_now && (
+                    <div className="rounded-xl border border-[#ba7c29]/25 bg-[#fffaf0] dark:bg-[#1a2522] p-3 text-xs leading-relaxed text-[#3b4e4c] dark:text-[#cad8d5]">
+                      <div className="flex items-center gap-1.5 font-bold text-[#ba7c29] text-[10px] uppercase mb-1">
+                        <Sparkles size={12} />
+                        <span>AI Dispatch Justification (“Why Now”)</span>
+                      </div>
+                      <p className="italic font-serif">“{item.why_now}”</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* AI Civic Intelligence & Pulse Brief Section */}
       {insights && (

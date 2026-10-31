@@ -233,6 +233,49 @@ class NearbyReportOut(ReportOut):
     duplicate_reason: Optional[str] = None
 
 
+class ScoreBreakdown(BaseModel):
+    severity_pts: int
+    sla_pts: int
+    upvote_pts: int
+    hotspot_pts: int
+    rain_pts: int
+    total: int
+
+
+class QueueItemOut(BaseModel):
+    id: str
+    docket_no: Optional[str] = None
+    title: str
+    category: str
+    location: str
+    severity: str
+    status: str
+    created_at: datetime
+    sla_hours: Optional[int] = 72
+    sla_remaining_hours: float
+    is_overdue: bool
+    upvotes: int
+    score: int
+    score_breakdown: ScoreBreakdown
+    why_now: Optional[str] = None
+    media_url: Optional[str] = None
+
+
+class CrewBatchOut(BaseModel):
+    batch_id: str
+    center_location: str
+    category: str
+    ticket_count: int
+    dockets: List[str]
+    report_ids: List[str]
+
+
+class AuthorityQueueOut(BaseModel):
+    total_queued: int
+    items: List[QueueItemOut]
+    crew_batches: List[CrewBatchOut]
+
+
 class StatsOut(BaseModel):
     total: int
     open: int
@@ -1112,6 +1155,189 @@ async def update_status(
 
         await session.commit()
         return {"message": "Status updated", "status": clean_status}
+
+
+@app.get("/api/authority/queue", response_model=AuthorityQueueOut)
+async def get_authority_priority_queue(
+    current_authority: Dict[str, Any] = Depends(require_authority),
+):
+    """Ranks open tickets by transparent composite urgency score, adds Gemini 'why now' for top 5,
+    and clusters tickets within 300m into crew dispatch batches."""
+    from agent.pipeline import generate_why_now_rationales
+
+    now = datetime.utcnow()
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Report).where(Report.status.in_([StatusEnum.open, StatusEnum.in_progress]))
+        )
+        reports = result.scalars().all()
+
+        if not reports:
+            return AuthorityQueueOut(total_queued=0, items=[], crew_batches=[])
+
+        # 1. Precalculate 300m hotspot counts
+        geo_reports = [r for r in reports if r.latitude is not None and r.longitude is not None]
+        cluster_counts = {}
+        for r in reports:
+            count = 0
+            if r.latitude is not None and r.longitude is not None:
+                for other in geo_reports:
+                    if other.id != r.id:
+                        d = haversine_km(r.latitude, r.longitude, other.latitude, other.longitude)
+                        if d <= 0.3:
+                            count += 1
+            cluster_counts[r.id] = count
+
+        # 2. Transparent score formula
+        sev_weights = {"critical": 100, "high": 60, "medium": 30, "low": 10}
+        scored_items = []
+
+        for r in reports:
+            sev_str = r.severity.value if hasattr(r.severity, "value") else str(r.severity)
+            sev_pts = sev_weights.get(sev_str.lower(), 30)
+
+            sla = r.sla_hours or 72
+            elapsed = (now - r.created_at).total_seconds() / 3600
+            sla_rem = round(sla - elapsed, 1)
+            is_overdue = sla_rem <= 0
+
+            if is_overdue:
+                sla_pts = 50
+            elif sla_rem < 12:
+                sla_pts = 30
+            elif sla_rem < 24:
+                sla_pts = 15
+            else:
+                sla_pts = 5
+
+            upvote_pts = min((r.upvotes or 0) * 5, 25)
+
+            h_count = cluster_counts.get(r.id, 0)
+            hotspot_pts = 20 if h_count >= 2 else (10 if h_count == 1 else 0)
+
+            rain_pts = 0
+            has_rain_risk = False
+            if r.agent_trace:
+                try:
+                    trace_steps = json.loads(r.agent_trace)
+                    for step in trace_steps:
+                        if step.get("step") == "weather":
+                            w_data = step.get("data", {})
+                            if w_data.get("heavy_rain_risk"):
+                                rain_pts = 15
+                                has_rain_risk = True
+                                break
+                except Exception:
+                    pass
+
+            total = sev_pts + sla_pts + upvote_pts + hotspot_pts + rain_pts
+
+            breakdown = ScoreBreakdown(
+                severity_pts=sev_pts,
+                sla_pts=sla_pts,
+                upvote_pts=upvote_pts,
+                hotspot_pts=hotspot_pts,
+                rain_pts=rain_pts,
+                total=total,
+            )
+
+            scored_items.append({
+                "report": r,
+                "score": total,
+                "score_breakdown": breakdown,
+                "sla_remaining_hours": sla_rem,
+                "is_overdue": is_overdue,
+                "rain_risk": has_rain_risk,
+                "hotspot_count": h_count,
+                "why_now": None,
+            })
+
+        scored_items.sort(key=lambda x: x["score"], reverse=True)
+
+        # 3. Gemini "why now" for top 5 tickets
+        top_5 = scored_items[:5]
+        if top_5:
+            top_5_data = [
+                {
+                    "id": item["report"].id,
+                    "title": item["report"].title,
+                    "category": item["report"].category,
+                    "severity": item["report"].severity.value if hasattr(item["report"].severity, "value") else str(item["report"].severity),
+                    "sla_remaining_hours": item["sla_remaining_hours"],
+                    "is_overdue": item["is_overdue"],
+                    "upvotes": item["report"].upvotes or 0,
+                    "rain_risk": item["rain_risk"],
+                    "hotspot_count": item["hotspot_count"],
+                }
+                for item in top_5
+            ]
+            try:
+                why_now_map = await generate_why_now_rationales(top_5_data)
+                for item in top_5:
+                    item["why_now"] = why_now_map.get(item["report"].id)
+            except Exception as e:
+                logger.warning(f"Error generating why_now: {e}")
+
+        # 4. Suggest 300m crew batches
+        crew_batches = []
+        assigned = set()
+        batch_counter = 1
+
+        for item in scored_items:
+            r = item["report"]
+            if r.id in assigned or r.latitude is None or r.longitude is None:
+                continue
+
+            cluster = [r]
+            for other_item in scored_items:
+                o_r = other_item["report"]
+                if o_r.id != r.id and o_r.id not in assigned and o_r.latitude is not None and o_r.longitude is not None:
+                    d = haversine_km(r.latitude, r.longitude, o_r.latitude, o_r.longitude)
+                    if d <= 0.3:
+                        cluster.append(o_r)
+
+            if len(cluster) >= 2:
+                for c_rep in cluster:
+                    assigned.add(c_rep.id)
+                cats = [c.category for c in cluster]
+                top_cat = max(set(cats), key=cats.count)
+                crew_batches.append(CrewBatchOut(
+                    batch_id=f"CREW-BATCH-{batch_counter:02d}",
+                    center_location=r.locality or r.location or "Cluster Vicinity",
+                    category=top_cat,
+                    ticket_count=len(cluster),
+                    dockets=[c.docket_no or c.id[:8] for c in cluster],
+                    report_ids=[c.id for c in cluster],
+                ))
+                batch_counter += 1
+
+        queue_items = [
+            QueueItemOut(
+                id=item["report"].id,
+                docket_no=item["report"].docket_no,
+                title=item["report"].title,
+                category=item["report"].category,
+                location=item["report"].location,
+                severity=item["report"].severity.value if hasattr(item["report"].severity, "value") else str(item["report"].severity),
+                status=item["report"].status.value if hasattr(item["report"].status, "value") else str(item["report"].status),
+                created_at=item["report"].created_at,
+                sla_hours=item["report"].sla_hours,
+                sla_remaining_hours=item["sla_remaining_hours"],
+                is_overdue=item["is_overdue"],
+                upvotes=item["report"].upvotes or 0,
+                score=item["score"],
+                score_breakdown=item["score_breakdown"],
+                why_now=item["why_now"],
+                media_url=item["report"].media_url,
+            )
+            for item in scored_items
+        ]
+
+        return AuthorityQueueOut(
+            total_queued=len(queue_items),
+            items=queue_items,
+            crew_batches=crew_batches,
+        )
 
 
 @app.post("/api/reports/{report_id}/resolve", response_model=ReportOut)

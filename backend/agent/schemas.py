@@ -98,6 +98,15 @@ class SemanticDuplicateList(BaseModel):
     candidates: List[SemanticDuplicateItem] = Field(default_factory=list)
 
 
+class WhyNowItem(BaseModel):
+    report_id: str = Field(..., description="ID of the report")
+    why_now: str = Field(..., description="Crisp 1-sentence operational justification for dispatching crew now")
+
+
+class WhyNowList(BaseModel):
+    items: List[WhyNowItem] = Field(default_factory=list)
+
+
 class PrefillSuggestion(BaseModel):
     title: str = Field(
         ...,

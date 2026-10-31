@@ -15,6 +15,7 @@ import json
 import asyncio
 import logging
 from typing import Optional, Dict, Any, List, Callable, Awaitable
+from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
 
@@ -24,6 +25,8 @@ from agent.schemas import (
     CriticEvaluation,
     PrefillSuggestion,
     SemanticDuplicateList,
+    WhyNowList,
+    WhyNowItem,
 )
 from agent.tools import (
     reverse_geocode,
@@ -822,4 +825,71 @@ async def check_semantic_duplicates(
             }
         else:
             results[c["id"]] = {"likely_duplicate": False, "duplicate_reason": None}
+    return results
+
+
+async def generate_why_now_rationales(tickets_data: List[Dict[str, Any]]) -> Dict[str, str]:
+    """Generate concise, actionable 1-sentence 'why now' operational justifications for top urgent tickets."""
+    if not tickets_data:
+        return {}
+
+    client = _get_client()
+    models = _get_models()
+
+    context_lines = []
+    for t in tickets_data:
+        context_lines.append(
+            f"- Report ID: {t['id']}\n"
+            f"  Title: {t.get('title')}\n"
+            f"  Category: {t.get('category')}\n"
+            f"  Severity: {t.get('severity')}\n"
+            f"  SLA Remaining: {t.get('sla_remaining_hours')}h ({'OVERDUE' if t.get('is_overdue') else 'Active'})\n"
+            f"  Endorsements: {t.get('upvotes', 0)}\n"
+            f"  Rain Risk: {'YES (Forecast Heavy Rain)' if t.get('rain_risk') else 'No'}\n"
+            f"  Cluster Count: {t.get('hotspot_count', 0)} nearby tickets"
+        )
+    context_text = "\n\n".join(context_lines)
+
+    prompt = (
+        "You are the Senior Municipal Dispatch Commander.\n"
+        "Provide a crisp, actionable 1-sentence 'why now' dispatch justification for each ticket.\n"
+        "Explain specifically why this issue must be prioritized for dispatch right now "
+        "(e.g. impending rain flooding the defect, safety hazard near pedestrians, statutory SLA breach, high community endorsements):\n\n"
+        f"{context_text}\n\n"
+        "Return structured JSON matching WhyNowList: {items: [{report_id: str, why_now: str}]}."
+    )
+
+    if client:
+        for model_name in models:
+            try:
+                resp = await asyncio.wait_for(
+                    client.aio.models.generate_content(
+                        model=model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=WhyNowList,
+                        ),
+                    ),
+                    timeout=10.0,
+                )
+                if resp.text:
+                    parsed = WhyNowList.model_validate_json(resp.text)
+                    return {p.report_id: p.why_now for p in parsed.items}
+            except Exception as e:
+                logger.warning(f"generate_why_now_rationales failed on {model_name}: {e}")
+
+    # Fallback heuristic
+    results = {}
+    for t in tickets_data:
+        sev = str(t.get("severity", "medium")).upper()
+        if t.get("is_overdue"):
+            urgency = "Statutory SLA deadline breached; immediate crew dispatch required to resolve non-compliance."
+        elif t.get("rain_risk"):
+            urgency = f"High priority {sev} hazard with heavy rain forecasted to aggravate structural erosion."
+        elif t.get("hotspot_count", 0) >= 2:
+            urgency = f"Part of a critical {t.get('hotspot_count')} ticket localized failure cluster requiring area-wide intervention."
+        else:
+            urgency = f"Priority {sev} ticket with {t.get('sla_remaining_hours')}h SLA remaining and {t.get('upvotes', 0)} citizen endorsements."
+        results[t["id"]] = urgency
     return results

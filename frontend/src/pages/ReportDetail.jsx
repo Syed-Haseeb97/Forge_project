@@ -807,6 +807,29 @@ export default function ReportDetail() {
                                 <p className="mt-0.5 text-[#556b68] dark:text-[#95a9a6] text-xs">
                                   {step.summary}
                                 </p>
+                                {(step.data?.transcript || step.data?.english_translation) && (
+                                  <div className="mt-2 rounded-lg border border-[#ba7c29]/25 bg-[#fffaf0] dark:bg-[#1a2522] p-2.5 text-[11px] space-y-1">
+                                    <div className="flex items-center gap-2 font-bold text-[#ba7c29] text-[10px] uppercase tracking-wide">
+                                      <span>Spoken Voice Evidence Detected</span>
+                                      {step.data.detected_language && (
+                                        <span className="rounded bg-[#ba7c29]/20 px-1.5 py-0.5 text-[9px]">
+                                          {step.data.detected_language}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {step.data.transcript && (
+                                      <p className="text-[#3b4e4c] dark:text-[#cad8d5] italic">
+                                        “{step.data.transcript}”
+                                      </p>
+                                    )}
+                                    {step.data.english_translation && (
+                                      <p className="text-[#2f7661] dark:text-[#70b99e] font-medium border-t border-[#ba7c29]/15 pt-1">
+                                        <span className="font-semibold text-[#1d5242] dark:text-[#8ac5b0]">English Translation: </span>
+                                        “{step.data.english_translation}”
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
 

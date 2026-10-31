@@ -33,6 +33,75 @@ export default function SubmitReport() {
   const fileInputRef = useRef(null)
   const audioInputRef = useRef(null)
 
+  // In-browser MediaRecorder voice recording state
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordDuration, setRecordDuration] = useState(0)
+  const mediaRecorderRef = useRef(null)
+  const audioChunksRef = useRef([])
+  const recordingTimerRef = useRef(null)
+
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+    }
+  }, [])
+
+  const handleStartRecording = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      toast('Browser microphone access unavailable; opening audio file picker', { icon: '🎙️' })
+      audioInputRef.current?.click()
+      return
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      audioChunksRef.current = []
+      const mime = MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '')
+      const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream)
+      mediaRecorderRef.current = recorder
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data)
+        }
+      }
+
+      recorder.onstop = () => {
+        stream.getTracks().forEach(t => t.stop())
+        const mimeType = recorder.mimeType || 'audio/webm'
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType })
+        const ext = mimeType.includes('mp4') ? 'm4a' : 'webm'
+        const audioFile = new File([audioBlob], `voice_complaint_${Date.now()}.${ext}`, { type: mimeType })
+        setFile(audioFile)
+        setFileType('audio')
+        setPreview(URL.createObjectURL(audioBlob))
+        setIsRecording(false)
+        clearInterval(recordingTimerRef.current)
+        setRecordDuration(0)
+        toast.success('Voice complaint recorded! Click "Auto-fill from photo/voice" to transcribe.', { icon: '🎙️' })
+      }
+
+      recorder.start(250)
+      setIsRecording(true)
+      setRecordDuration(0)
+      recordingTimerRef.current = setInterval(() => {
+        setRecordDuration(d => d + 1)
+      }, 1000)
+    } catch (err) {
+      console.warn('Microphone error:', err)
+      toast.error('Microphone access denied or blocked. Select an audio file instead.')
+      audioInputRef.current?.click()
+    }
+  }
+
+  const handleStopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop()
+    }
+  }
+
   // Auto-acquire current location if granted by browser to CENTER the map only (does NOT drop pin)
   useEffect(() => {
     if (navigator.geolocation) {
@@ -464,19 +533,46 @@ export default function SubmitReport() {
                       </span>
                     </button>
 
-                    {/* Record Audio */}
+                    {/* Record Audio via Browser MediaRecorder */}
+                    {isRecording ? (
+                      <button
+                        type="button"
+                        onClick={handleStopRecording}
+                        className="group flex min-h-[92px] flex-col items-start justify-between rounded-xl border border-red-500/50 bg-[#b04b37] p-4 text-left text-white transition hover:-translate-y-0.5 animate-pulse shadow-md"
+                      >
+                        <span className="flex size-8 items-center justify-center rounded-lg bg-white/20 text-white">
+                          <CivicIcon name="audio" size={18} />
+                        </span>
+                        <span>
+                          <span className="block text-xs font-bold">Stop Recording ({recordDuration}s)</span>
+                          <span className="mt-0.5 block text-[10px] text-white/80">Tap to finish speaking</span>
+                        </span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleStartRecording}
+                        className="group flex min-h-[92px] flex-col items-start justify-between rounded-xl border border-[#2d615c]/30 bg-[#0d3035] p-4 text-left text-white transition hover:-translate-y-0.5 hover:bg-[#16444a]"
+                      >
+                        <span className="flex size-8 items-center justify-center rounded-lg bg-white/10 text-[#e8b855]">
+                          <CivicIcon name="audio" size={18} />
+                        </span>
+                        <span>
+                          <span className="block text-xs font-bold">Speak complaint</span>
+                          <span className="mt-0.5 block text-[10px] text-white/55">Record voice via mic</span>
+                        </span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Fallback Audio File Upload Trigger */}
+                  <div className="flex justify-end pt-1">
                     <button
                       type="button"
                       onClick={() => audioInputRef.current?.click()}
-                      className="group flex min-h-[92px] flex-col items-start justify-between rounded-xl border border-[#2d615c]/30 bg-[#0d3035] p-4 text-left text-white transition hover:-translate-y-0.5 hover:bg-[#16444a]"
+                      className="text-[11px] font-medium text-[#556b68] dark:text-[#95a9a6] hover:text-[#ba7c29] underline transition"
                     >
-                      <span className="flex size-8 items-center justify-center rounded-lg bg-white/10 text-[#e8b855]">
-                        <CivicIcon name="audio" size={18} />
-                      </span>
-                      <span>
-                        <span className="block text-xs font-bold">Record audio</span>
-                        <span className="mt-0.5 block text-[10px] text-white/55">Spoken grievance voice</span>
-                      </span>
+                      Or select an existing audio file (.mp3, .m4a, .wav)
                     </button>
                   </div>
 

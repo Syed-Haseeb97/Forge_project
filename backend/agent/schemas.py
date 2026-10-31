@@ -12,6 +12,10 @@ class EvidenceAnalysis(BaseModel):
         default=None,
         description="Verbatim or summarized transcript if audio evidence is provided"
     )
+    english_translation: Optional[str] = Field(
+        default=None,
+        description="English translation of spoken transcript or regional grievance"
+    )
     issue_type: str = Field(
         ...,
         description="Specific infrastructure or civic defect observed (e.g. pothole, ruptured pipeline, collapsed culvert, overflowing garbage bin)"

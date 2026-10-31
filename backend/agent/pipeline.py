@@ -214,7 +214,8 @@ async def _execute_agent_pipeline(
             "You are a municipal safety engineer and civic multimodal triage expert. "
             "Analyze the provided photographic/audio/textual civic grievance evidence. "
             "Identify the exact language (e.g. English, Hindi, Hinglish, Tamil, Telugu, Marathi, Bengali), "
-            "transcribe any speech if audio, specify the structural issue type, list visible hazards, "
+            "transcribe any speech if audio into transcript, provide accurate english_translation if spoken in an Indian regional language or dialect, "
+            "specify the structural issue type, list visible hazards, "
             "estimate physical dimensions where visible, and assign initial evidence-based severity "
             "(low, medium, high, critical) with confidence."
         )
@@ -243,16 +244,22 @@ async def _execute_agent_pipeline(
                 dur = int((time.time() - t_sub0) * 1000)
                 if resp.text:
                     evidence_res = EvidenceAnalysis.model_validate_json(resp.text)
+                    summary = (
+                        f"Identified {evidence_res.issue_type} in {evidence_res.detected_language} "
+                        f"(Evidence Severity: {evidence_res.evidence_severity.upper()}, "
+                        f"Hazards: {len(evidence_res.visible_hazards)})"
+                    )
+                    if evidence_res.transcript:
+                        summary += f" | Spoken: '{evidence_res.transcript}'"
+                    if evidence_res.english_translation:
+                        summary += f" | Translated: '{evidence_res.english_translation}'"
+
                     step_data = {
                         "step": "understand_evidence",
                         "tool": f"gemini_multimodal ({model_name})",
                         "status": "success",
                         "duration_ms": dur,
-                        "summary": (
-                            f"Identified {evidence_res.issue_type} in {evidence_res.detected_language} "
-                            f"(Evidence Severity: {evidence_res.evidence_severity.upper()}, "
-                            f"Hazards: {len(evidence_res.visible_hazards)})"
-                        ),
+                        "summary": summary,
                         "data": evidence_res.model_dump(),
                     }
                     trace.append(step_data)
@@ -268,6 +275,7 @@ async def _execute_agent_pipeline(
         evidence_res = EvidenceAnalysis(
             detected_language="English",
             transcript=None,
+            english_translation=None,
             issue_type=category.replace("_", " "),
             visible_hazards=["Unverified field report requiring inspection"],
             estimated_dimensions="Not visually discernible",

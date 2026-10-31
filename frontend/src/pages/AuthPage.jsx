@@ -108,6 +108,13 @@ export default function AuthPage() {
       return
     }
 
+    const phoneClean = signupForm.phone.replace(/\D/g, '')
+    if (phoneClean && phoneClean.length !== 10) {
+      toast.error('Indian mobile number must be exactly 10 digits')
+      return
+    }
+    const formattedPhone = phoneClean ? `+91 ${phoneClean}` : null
+
     setSending(true)
     try {
       const { data } = await axios.post('/api/auth/register-send-code', {
@@ -115,7 +122,7 @@ export default function AuthPage() {
         last_name: signupForm.lastName.trim(),
         email: cleanEmail,
         dob: signupForm.dob,
-        phone: signupForm.phone.trim() || null,
+        phone: formattedPhone,
         aadhaar_last4: aadhaarClean,
         address: signupForm.address.trim(),
       })
@@ -146,6 +153,8 @@ export default function AuthPage() {
     }
 
     const activeEmail = mode === 'signup' ? signupForm.email.trim().toLowerCase() : loginEmail.trim().toLowerCase()
+    const phoneClean = signupForm.phone.replace(/\D/g, '')
+    const formattedPhone = phoneClean ? `+91 ${phoneClean}` : null
 
     setVerifying(true)
     try {
@@ -158,7 +167,7 @@ export default function AuthPage() {
             last_name: signupForm.lastName.trim(),
             email: activeEmail,
             dob: signupForm.dob,
-            phone: signupForm.phone.trim() || null,
+            phone: formattedPhone,
             aadhaar_last4: signupForm.aadhaarLast4.trim(),
             address: signupForm.address.trim(),
           },
@@ -411,17 +420,29 @@ export default function AuthPage() {
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee]">
-                      Phone Number
+                      Mobile Number
                     </label>
                     <span className="text-[10px] text-[#70817e]">Optional</span>
                   </div>
-                  <input
-                    type="tel"
-                    value={signupForm.phone}
-                    onChange={setSignupField('phone')}
-                    placeholder="+91 98765 43210"
-                    className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] px-3.5 py-3 text-xs sm:text-sm text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29]"
-                  />
+                  <div className="relative flex items-center">
+                    {/* Locked +91 Calling Code for India */}
+                    <div className="absolute left-0 inset-y-0 flex items-center pl-3 pr-2.5 rounded-l-xl border-r border-[#173e42]/15 dark:border-white/10 bg-[#e7ebe8]/70 dark:bg-[#071c1e] select-none text-xs font-mono font-bold text-[#0d3035] dark:text-[#e8b855] pointer-events-none">
+                      <span className="mr-1.5 text-xs">🇮🇳</span>
+                      <span>+91</span>
+                    </div>
+                    <input
+                      type="tel"
+                      maxLength={10}
+                      pattern="[0-9]{10}"
+                      value={signupForm.phone}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, '').slice(0, 10)
+                        setSignupForm(prev => ({ ...prev, phone: digits }))
+                      }}
+                      placeholder="98765 43210"
+                      className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] py-3 pl-[76px] pr-3.5 text-xs sm:text-sm font-mono text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29] transition placeholder:text-[#95a5a3]"
+                    />
+                  </div>
                 </div>
               </div>
 

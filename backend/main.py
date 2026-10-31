@@ -225,6 +225,16 @@ async def register_send_code(payload: RegisterSendCodeRequest):
     if not address:
         raise HTTPException(status_code=400, detail="Primary residence address is required.")
 
+    phone_val = None
+    if payload.phone and payload.phone.strip():
+        raw_digits = "".join(filter(str.isdigit, payload.phone))
+        if len(raw_digits) == 12 and raw_digits.startswith("91"):
+            raw_digits = raw_digits[2:]
+        if len(raw_digits) == 10:
+            phone_val = f"+91 {raw_digits}"
+        else:
+            raise HTTPException(status_code=400, detail="Indian mobile number must be exactly 10 digits under +91.")
+
     # Check if citizen already registered
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(Citizen).where(Citizen.email == email))
@@ -240,7 +250,7 @@ async def register_send_code(payload: RegisterSendCodeRequest):
         "last_name": last_name,
         "email": email,
         "dob": dob,
-        "phone": payload.phone.strip() if payload.phone else None,
+        "phone": phone_val,
         "aadhaar_last4": aadhaar_clean,
         "address": address,
     }
@@ -289,13 +299,21 @@ async def register_verify_code(payload: RegisterVerifyCodeRequest):
         result = await session.execute(select(Citizen).where(Citizen.email == email))
         citizen = result.scalar_one_or_none()
         if not citizen:
+            raw_phone = citizen_info.get("phone")
+            final_phone = None
+            if raw_phone:
+                digits = "".join(filter(str.isdigit, str(raw_phone)))
+                if len(digits) == 12 and digits.startswith("91"):
+                    digits = digits[2:]
+                final_phone = f"+91 {digits}" if len(digits) == 10 else str(raw_phone)
+
             citizen = Citizen(
                 id=str(uuid.uuid4()),
                 first_name=citizen_info["first_name"],
                 last_name=citizen_info["last_name"],
                 email=email,
                 dob=citizen_info["dob"],
-                phone=citizen_info.get("phone"),
+                phone=final_phone,
                 aadhaar_last4=citizen_info["aadhaar_last4"],
                 address=citizen_info["address"],
                 is_verified=True,

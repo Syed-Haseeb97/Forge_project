@@ -9,7 +9,7 @@ const ThemeContext = createContext({
 export function ThemeProvider({ children }) {
   const [isDark, setIsDark] = useState(() => {
     try {
-      const saved = localStorage.getItem('fordge_theme')
+      const saved = localStorage.getItem('janaawaz_theme') || localStorage.getItem('fordge_theme')
       if (saved) return saved === 'dark'
       return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
     } catch {
@@ -36,7 +36,7 @@ export function ThemeProvider({ children }) {
         }
       })
 
-      localStorage.setItem('fordge_theme', dark ? 'dark' : 'light')
+      localStorage.setItem('janaawaz_theme', dark ? 'dark' : 'light')
     } catch (e) {
       console.error('Failed to sync theme classes', e)
     }

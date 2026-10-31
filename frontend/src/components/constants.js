@@ -33,7 +33,7 @@ export const CATEGORY_EMOJIS = Object.fromEntries(
 
 export const getWatchlist = () => {
   try {
-    return JSON.parse(localStorage.getItem('fordge_watchlist') || '[]')
+    return JSON.parse(localStorage.getItem('janaawaz_watchlist') || localStorage.getItem('fordge_watchlist') || '[]')
   } catch {
     return []
   }
@@ -48,7 +48,7 @@ export const toggleWatchlist = (id) => {
     } else {
       list.push(id)
     }
-    localStorage.setItem('fordge_watchlist', JSON.stringify(list))
+    localStorage.setItem('janaawaz_watchlist', JSON.stringify(list))
     return list
   } catch {
     return []

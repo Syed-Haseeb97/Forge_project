@@ -16,7 +16,7 @@
     <script>
       (function() {
         try {
-          var saved = localStorage.getItem('fordge_theme');
+          var saved = localStorage.getItem('janaawaz_theme') || localStorage.getItem('fordge_theme');
           var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
           if (saved === 'dark' || (!saved && prefersDark)) {
             document.documentElement.classList.add('dark');

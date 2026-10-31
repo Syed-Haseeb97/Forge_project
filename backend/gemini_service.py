@@ -1,4 +1,4 @@
-"""Gemini-powered report analysis service for Fordge Civic Triage"""
+"""Gemini-powered report analysis service for Jan Aawaz Civic Triage"""
 import os
 import json
 import re

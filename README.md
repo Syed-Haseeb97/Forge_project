@@ -219,7 +219,10 @@ Both tests run automatically on every pull request and push to `main` via the Gi
 - In **Storage**, create a public bucket named `reports` (or use local filesystem storage via `UPLOAD_DIR`).
 
 ### 2. Backend Deployment (Render or Fly.io)
-Deploy using the included [`backend/Dockerfile`](backend/Dockerfile):
+> [!NOTE]
+> On Render, the repository root (`./`) is the service root directory. The build command is `pip install -r backend/requirements.txt`, and the start command runs from `backend/`:
+> `cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`
+> This is automated by [`render.yaml`](render.yaml) and [`Procfile`](Procfile). Alternatively, deploy using [`backend/Dockerfile`](backend/Dockerfile):
 ```dockerfile
 FROM python:3.11-slim
 WORKDIR /app

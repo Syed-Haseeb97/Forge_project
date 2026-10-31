@@ -676,7 +676,7 @@ export default function SubmitReport() {
                       value={form.location}
                       onChange={set('location')}
                       placeholder="Street name, landmark, cross junction..."
-                      className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] py-3 pr-4 text-sm text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#9aa6a4] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition font-medium"
+                      className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] py-3 !pl-11 pr-4 text-sm text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#9aa6a4] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition font-medium"
                     />
                   </div>
 

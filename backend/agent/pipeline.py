@@ -14,7 +14,7 @@ import time
 import json
 import asyncio
 import logging
-from typing import Optional, Dict, Any, List, Callable, Awaitable
+from typing import Optional, Dict, Any, List, Callable, Awaitable, Tuple
 from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
@@ -729,6 +729,14 @@ async def prefill_from_media(
     }
 
 
+# In-memory caches for Phase J
+_SEMANTIC_DUP_CACHE: Dict[Tuple[str, str], Tuple[float, Dict[str, Dict[str, Any]]]] = {}
+_SEMANTIC_DUP_CACHE_TTL = 600.0  # 10 minutes
+
+_WHY_NOW_CACHE: Dict[str, Tuple[float, Dict[str, str]]] = {}
+_WHY_NOW_CACHE_TTL = 300.0  # 5 minutes
+
+
 async def check_semantic_duplicates(
     new_title: Optional[str],
     new_description: Optional[str],
@@ -738,6 +746,18 @@ async def check_semantic_duplicates(
     """Compare top candidate reports against the incoming grievance using Gemini structured comparison."""
     if not candidates:
         return {}
+
+    # Key by candidate ids and title (10-minute cache)
+    top3 = candidates[:3]
+    cand_ids = ",".join(sorted(str(c.get("id")) for c in top3 if c.get("id")))
+    clean_title = (new_title or "").strip().lower()
+    cache_key = (cand_ids, clean_title)
+    now_ts = time.time()
+
+    if cache_key in _SEMANTIC_DUP_CACHE:
+        cached_ts, cached_val = _SEMANTIC_DUP_CACHE[cache_key]
+        if now_ts - cached_ts < _SEMANTIC_DUP_CACHE_TTL:
+            return cached_val
 
     # If neither title nor description provided, apply deterministic proximity heuristics
     if not (new_title and new_title.strip()) and not (new_description and new_description.strip()):
@@ -752,6 +772,7 @@ async def check_semantic_duplicates(
                 }
             else:
                 results[c["id"]] = {"likely_duplicate": False, "duplicate_reason": None}
+        _SEMANTIC_DUP_CACHE[cache_key] = (now_ts, results)
         return results
 
     client = _get_client()
@@ -798,13 +819,15 @@ async def check_semantic_duplicates(
                 )
                 if resp.text:
                     parsed = SemanticDuplicateList.model_validate_json(resp.text)
-                    return {
+                    results = {
                         item.report_id: {
                             "likely_duplicate": item.likely_duplicate,
                             "duplicate_reason": item.duplicate_reason,
                         }
                         for item in parsed.candidates
                     }
+                    _SEMANTIC_DUP_CACHE[cache_key] = (now_ts, results)
+                    return results
             except Exception as e:
                 logger.warning(f"check_semantic_duplicates failed on {model_name}: {e}")
 
@@ -825,6 +848,7 @@ async def check_semantic_duplicates(
             }
         else:
             results[c["id"]] = {"likely_duplicate": False, "duplicate_reason": None}
+    _SEMANTIC_DUP_CACHE[cache_key] = (now_ts, results)
     return results
 
 
@@ -832,6 +856,16 @@ async def generate_why_now_rationales(tickets_data: List[Dict[str, Any]]) -> Dic
     """Generate concise, actionable 1-sentence 'why now' operational justifications for top urgent tickets."""
     if not tickets_data:
         return {}
+
+    # 5-minute cache keyed by sorted ids of the top 5
+    top5 = tickets_data[:5]
+    sorted_ids_key = ",".join(sorted(str(t.get("id")) for t in top5 if t.get("id")))
+    now_ts = time.time()
+
+    if sorted_ids_key in _WHY_NOW_CACHE:
+        cached_ts, cached_val = _WHY_NOW_CACHE[sorted_ids_key]
+        if now_ts - cached_ts < _WHY_NOW_CACHE_TTL:
+            return cached_val
 
     client = _get_client()
     models = _get_models()
@@ -875,7 +909,9 @@ async def generate_why_now_rationales(tickets_data: List[Dict[str, Any]]) -> Dic
                 )
                 if resp.text:
                     parsed = WhyNowList.model_validate_json(resp.text)
-                    return {p.report_id: p.why_now for p in parsed.items}
+                    results = {p.report_id: p.why_now for p in parsed.items}
+                    _WHY_NOW_CACHE[sorted_ids_key] = (now_ts, results)
+                    return results
             except Exception as e:
                 logger.warning(f"generate_why_now_rationales failed on {model_name}: {e}")
 
@@ -892,4 +928,5 @@ async def generate_why_now_rationales(tickets_data: List[Dict[str, Any]]) -> Dic
         else:
             urgency = f"Priority {sev} ticket with {t.get('sla_remaining_hours')}h SLA remaining and {t.get('upvotes', 0)} citizen endorsements."
         results[t["id"]] = urgency
+    _WHY_NOW_CACHE[sorted_ids_key] = (now_ts, results)
     return results

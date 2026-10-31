@@ -451,7 +451,7 @@ export default function Dashboard() {
                         <input
                           required
                           style={{ paddingLeft: '2.75rem' }}
-                          className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] py-3 pr-4 text-sm text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#95a5a3] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition font-medium"
+                          className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] py-3 !pl-11 pr-4 text-sm text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#95a5a3] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition font-medium"
                           placeholder="Street, landmark, or intersection"
                           value={quickForm.location}
                           onChange={e => setQuickForm(f => ({ ...f, location: e.target.value }))}

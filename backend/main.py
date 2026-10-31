@@ -10,7 +10,8 @@ import uuid
 import csv
 import io
 import asyncio
-from datetime import datetime
+import logging
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -54,7 +55,9 @@ from auth import (
     get_role_for_email,
 )
 from migrations import ensure_schema
-from sqlalchemy import select, text
+from sqlalchemy import select, text, func
+
+logger = logging.getLogger("janaawaz")
 
 load_dotenv()
 
@@ -108,6 +111,7 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 @app.on_event("startup")
 async def startup():
     await ensure_schema()
+    await sweep_stale_triaging_reports()
     start_watchdog_background_task()
 
 
@@ -610,6 +614,97 @@ async def send_auth_code(payload: LoginSendCodeRequest):
     return await login_send_code(payload)
 
 
+def _apply_triage_fallback(
+    rep: Report,
+    title: Optional[str] = None,
+    category: Optional[str] = None,
+    description: Optional[str] = None,
+    location: Optional[str] = None,
+) -> Dict[str, Any]:
+    from agent.pipeline import _fallback_triage_result
+    cat_val = category or (rep.category.value if hasattr(rep.category, "value") else str(rep.category or "other"))
+    fb = _fallback_triage_result(
+        title=title or rep.title or "Civic Incident",
+        category=cat_val,
+        description=description or rep.description or "",
+        location=location or rep.location or "Reported Location",
+        latitude=rep.latitude,
+        longitude=rep.longitude,
+    )
+    rep.severity = SeverityEnum(fb["severity"])
+    rep.routed_to = fb["routed_to"]
+    rep.action_plan = fb["action_plan"]
+    rep.safety_precautions = fb["safety_precautions"]
+    rep.sla_hours = fb["sla_hours"]
+    rep.ai_analysis = fb["ai_analysis"]
+    rep.confidence = fb["confidence"]
+    rep.severity_rationale = fb["severity_rationale"]
+    rep.detected_language = rep.detected_language or fb.get("detected_language", "English")
+    rep.locality = rep.locality or location or rep.location
+    rep.triage_status = "done"
+
+    trace_list = []
+    if rep.agent_trace:
+        try:
+            trace_list = json.loads(rep.agent_trace)
+        except Exception:
+            trace_list = []
+
+    trace_list.append({
+        "step": "fallback_recovery",
+        "tool": "heuristic_fallback_agent",
+        "status": "fallback",
+        "duration_ms": 50,
+        "summary": "Heuristic fallback applied: severity, department routing, and SLA established",
+        "data": {
+            "severity": fb["severity"],
+            "department": fb["routed_to"],
+            "sla_hours": fb["sla_hours"],
+            "rationale": fb["severity_rationale"],
+        },
+    })
+    rep.agent_trace = json.dumps(trace_list)
+    return fb
+
+
+async def sweep_stale_triaging_reports():
+    """Sweeps reports stuck in 'triaging' older than 3 minutes, applying heuristic fallback."""
+    cutoff = datetime.utcnow() - timedelta(minutes=3)
+    try:
+        async with AsyncSessionLocal() as session:
+            res = await session.execute(
+                select(Report).where(
+                    Report.triage_status == "triaging",
+                    Report.created_at < cutoff,
+                )
+            )
+            stale_reports = res.scalars().all()
+            if not stale_reports:
+                return
+
+            logger.info(f"Sweeping {len(stale_reports)} stale triaging reports older than 3 minutes...")
+            for rep in stale_reports:
+                fb = _apply_triage_fallback(rep)
+                await log_timeline(
+                    session=session,
+                    report_id=rep.id,
+                    status=StatusEnum.open.value,
+                    actor="Jan Aawaz Startup Sweeper",
+                    action_type="ai_triage",
+                    notes=f"Stale triage recovery: assessed via fallback as {fb['severity'].upper()} priority ({rep.sla_hours}h SLA). Routed to {rep.routed_to}.",
+                )
+            await session.commit()
+
+            # Trigger initial dispatch for swept tickets in background tasks
+            for rep in stale_reports:
+                try:
+                    asyncio.create_task(draft_and_send_dispatch(rep.id, "initial"))
+                except Exception as e:
+                    logger.warning(f"Error scheduling dispatch for swept ticket {rep.id}: {e}")
+    except Exception as e:
+        logger.error(f"Error during startup triage sweeper: {e}", exc_info=True)
+
+
 # ── Background Pipeline Task ──────────────────────────────────────────────────
 async def run_background_triage(
     report_id: str,
@@ -706,8 +801,28 @@ async def run_background_triage(
             async with AsyncSessionLocal() as session:
                 rep = await session.get(Report, report_id)
                 if rep:
-                    rep.triage_status = "failed"
+                    fb = _apply_triage_fallback(
+                        rep=rep,
+                        title=title,
+                        category=category,
+                        description=description,
+                        location=location,
+                    )
+                    await log_timeline(
+                        session=session,
+                        report_id=report_id,
+                        status=StatusEnum.open.value,
+                        actor="Jan Aawaz AI Fallback",
+                        action_type="ai_triage",
+                        notes=f"Assessed via fallback as {fb['severity'].upper()} priority ({rep.sla_hours}h SLA). Routed to {rep.routed_to}.",
+                    )
                     await session.commit()
+
+            # Continue to dispatch even on failure
+            try:
+                await draft_and_send_dispatch(report_id, "initial")
+            except Exception as disp_err:
+                logger.warning(f"Error sending dispatch after fallback for {report_id}: {disp_err}")
         except Exception:
             pass
 
@@ -751,66 +866,77 @@ async def submit_report(
             if cit:
                 citizen_id = cit.id
 
-        # Determine sequential docket_no (JA-2026-00001)
-        docket_stmt = select(Report.docket_no).where(Report.docket_no.like("JA-2026-%")).order_by(Report.docket_no.desc()).limit(1)
-        last_docket = (await session.execute(docket_stmt)).scalar_one_or_none()
-        next_seq = 1
-        if last_docket:
+        from sqlalchemy.exc import IntegrityError
+
+        max_docket_retries = 3
+        for attempt in range(max_docket_retries):
             try:
-                next_seq = int(last_docket.split("-")[-1]) + 1
-            except ValueError:
+                # Determine sequential docket_no (JA-2026-00001)
+                docket_stmt = select(Report.docket_no).where(Report.docket_no.like("JA-2026-%")).order_by(Report.docket_no.desc()).limit(1)
+                last_docket = (await session.execute(docket_stmt)).scalar_one_or_none()
                 next_seq = 1
-        docket_no = f"JA-2026-{next_seq:05d}"
+                if last_docket:
+                    try:
+                        next_seq = int(last_docket.split("-")[-1]) + 1
+                    except ValueError:
+                        next_seq = 1
+                docket_no = f"JA-2026-{next_seq:05d}"
 
-        is_demo_accel = DEV_MODE or (get_sla_time_scale() > 1.0)
-        default_dept = ROUTING_MAP.get(category, ROUTING_MAP["other"])
+                is_demo_accel = DEV_MODE or (get_sla_time_scale() > 1.0)
+                default_dept = ROUTING_MAP.get(category, ROUTING_MAP["other"])
 
-        report = Report(
-            id=report_id,
-            docket_no=docket_no,
-            citizen_id=citizen_id,
-            citizen_email=actual_citizen_email.strip().lower() if actual_citizen_email else None,
-            title=title,
-            description=description,
-            category=category,
-            location=location,
-            latitude=latitude,
-            longitude=longitude,
-            severity=SeverityEnum.medium,
-            status=StatusEnum.open,
-            triage_status="triaging",
-            needs_human_review=False,
-            ai_analysis="Autonomous AI multi-signal triage pipeline is analyzing evidence, GIS layers, weather, and recurrence...",
-            action_plan=None,
-            safety_precautions=None,
-            sla_hours=72,
-            routed_to=default_dept,
-            upvotes=0,
-            media_url=media_url,
-            agent_trace="[]",
-            confidence=None,
-            severity_rationale=None,
-            detected_language="English",
-            locality=location,
-            demo_accel=is_demo_accel,
-            created_at=now,
-            updated_at=now,
-        )
-        session.add(report)
+                report = Report(
+                    id=report_id,
+                    docket_no=docket_no,
+                    citizen_id=citizen_id,
+                    citizen_email=actual_citizen_email.strip().lower() if actual_citizen_email else None,
+                    title=title,
+                    description=description,
+                    category=category,
+                    location=location,
+                    latitude=latitude,
+                    longitude=longitude,
+                    severity=SeverityEnum.medium,
+                    status=StatusEnum.open,
+                    triage_status="triaging",
+                    needs_human_review=False,
+                    ai_analysis="Autonomous AI multi-signal triage pipeline is analyzing evidence, GIS layers, weather, and recurrence...",
+                    action_plan=None,
+                    safety_precautions=None,
+                    sla_hours=72,
+                    routed_to=default_dept,
+                    upvotes=0,
+                    media_url=media_url,
+                    agent_trace="[]",
+                    confidence=None,
+                    severity_rationale=None,
+                    detected_language="English",
+                    locality=location,
+                    demo_accel=is_demo_accel,
+                    created_at=now,
+                    updated_at=now,
+                )
+                session.add(report)
 
-        # Log initial timeline event
-        await log_timeline(
-            session=session,
-            report_id=report_id,
-            status=StatusEnum.open.value,
-            actor="Citizen Reporter",
-            action_type="submitted",
-            notes=f"Civic grievance registered at {location}. Initializing agentic triage pipeline.",
-            media_url=media_url,
-        )
+                # Log initial timeline event
+                await log_timeline(
+                    session=session,
+                    report_id=report_id,
+                    status=StatusEnum.open.value,
+                    actor="Citizen Reporter",
+                    action_type="submitted",
+                    notes=f"Civic grievance registered at {location}. Initializing agentic triage pipeline.",
+                    media_url=media_url,
+                )
 
-        await session.commit()
-        await session.refresh(report)
+                await session.commit()
+                await session.refresh(report)
+                break
+            except IntegrityError as ie:
+                await session.rollback()
+                logger.warning(f"IntegrityError on docket insertion (attempt {attempt + 1}/{max_docket_retries}): {ie}")
+                if attempt == max_docket_retries - 1:
+                    raise
 
         # Enqueue background triage pipeline
         background_tasks.add_task(
@@ -922,10 +1048,12 @@ async def list_reports(
 
 @app.get("/api/reports/reverse-geocode")
 async def reverse_geocode_lookup(
+    request: Request,
     latitude: float = Query(..., description="Latitude coordinate"),
     longitude: float = Query(..., description="Longitude coordinate"),
 ):
     """Resolve coordinates to clean street / locality address for citizen form auto-fill."""
+    await check_ip_rate_limit(request, limit=20, window_secs=60.0)
     from agent.tools import reverse_geocode
     try:
         geo = await reverse_geocode(latitude, longitude)
@@ -952,6 +1080,7 @@ async def reverse_geocode_lookup(
 
 @app.get("/api/reports/nearby", response_model=List[NearbyReportOut])
 async def get_nearby_reports(
+    request: Request,
     latitude: float = Query(...),
     longitude: float = Query(...),
     radius_km: float = Query(0.5, description="Search radius in kilometers"),
@@ -960,6 +1089,7 @@ async def get_nearby_reports(
     description: Optional[str] = Query(None),
 ):
     """Detect nearby existing reports for duplicate mitigation and semantic duplicate matching (FixMyStreet / Mark-a-Spot pattern)"""
+    await check_ip_rate_limit(request, limit=30, window_secs=60.0)
     from sqlalchemy import select, and_
 
     filters = [
@@ -1075,9 +1205,9 @@ async def lookup_report(q: str = Query(..., description="Docket number, UUID, or
     async with AsyncSessionLocal() as session:
         # 1. Direct docket_no match (case-insensitive)
         res = await session.execute(
-            select(Report).where(func.lower(Report.docket_no) == clean_q.lower())
+            select(Report).where(func.lower(Report.docket_no) == clean_q.lower()).order_by(Report.created_at.desc())
         )
-        report = res.scalar_one_or_none()
+        report = res.scalars().first()
         if report:
             return report
 
@@ -1085,31 +1215,31 @@ async def lookup_report(q: str = Query(..., description="Docket number, UUID, or
         if clean_q.isdigit():
             padded = f"JA-2026-{int(clean_q):05d}"
             res = await session.execute(
-                select(Report).where(func.lower(Report.docket_no) == padded.lower())
+                select(Report).where(func.lower(Report.docket_no) == padded.lower()).order_by(Report.created_at.desc())
             )
-            report = res.scalar_one_or_none()
+            report = res.scalars().first()
             if report:
                 return report
         elif clean_q.lower().startswith("2026-"):
             res = await session.execute(
-                select(Report).where(func.lower(Report.docket_no) == f"ja-{clean_q.lower()}")
+                select(Report).where(func.lower(Report.docket_no) == f"ja-{clean_q.lower()}").order_by(Report.created_at.desc())
             )
-            report = res.scalar_one_or_none()
+            report = res.scalars().first()
             if report:
                 return report
 
         # 3. Exact full UUID match
         res = await session.execute(select(Report).where(Report.id == clean_q))
-        report = res.scalar_one_or_none()
+        report = res.scalars().first()
         if report:
             return report
 
         # 4. ID prefix match (e.g. 8-char prefix)
         if len(clean_q) >= 6:
             res = await session.execute(
-                select(Report).where(Report.id.like(f"{clean_q}%")).limit(1)
+                select(Report).where(Report.id.like(f"{clean_q}%")).order_by(Report.created_at.desc()).limit(1)
             )
-            report = res.scalar_one_or_none()
+            report = res.scalars().first()
             if report:
                 return report
 

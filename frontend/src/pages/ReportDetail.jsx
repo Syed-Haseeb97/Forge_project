@@ -7,17 +7,23 @@ import CivicIcon from '../components/CivicIcon'
 import { isWatched, toggleWatchlist } from '../components/constants'
 import CivicMap from '../components/CivicMap'
 import CameraCapture from '../components/CameraCapture'
+import { useAuth } from '../components/AuthContext'
 
 const STATUSES = ['open', 'in_progress', 'resolved', 'closed']
 
 export default function ReportDetail() {
   const { id } = useParams()
+  const { user, isAuthority } = useAuth()
   const [report, setReport] = useState(null)
   const [timeline, setTimeline] = useState([])
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
   const [comments, setComments] = useState([])
-  const [commentForm, setCommentForm] = useState({ author: '', role: 'citizen', content: '' })
+  const [commentForm, setCommentForm] = useState({
+    author: user?.name || '',
+    role: isAuthority ? 'authority' : 'citizen',
+    content: ''
+  })
   const [submittingComment, setSubmittingComment] = useState(false)
   const [watched, setWatched] = useState(false)
 
@@ -485,98 +491,111 @@ export default function ReportDetail() {
                 Update Operations Status
               </h2>
             </div>
+            {!isAuthority && (
+              <span className="rounded-full bg-[#f0f2f0] dark:bg-[#122527] px-3 py-1 text-[10px] font-bold text-[#687a77] dark:text-[#8ea5a2]">
+                Authority Clearance Required
+              </span>
+            )}
           </div>
 
-          <div className="flex flex-wrap gap-2.5">
-            {STATUSES.map(s => (
-              <button
-                key={s}
-                type="button"
-                disabled={updating || report.status === s}
-                onClick={() => handleStatusChange(s)}
-                className={`rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wider transition disabled:opacity-50 ${
-                  report.status === s
-                    ? 'bg-[#0d3035] text-white shadow-sm'
-                    : 'border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] text-[#556b68] dark:text-[#95a9a6] hover:bg-[#fffaf0] hover:text-[#0d3035]'
-                }`}
-              >
-                {s.replace('_', ' ')}
-              </button>
-            ))}
-          </div>
-
-          {/* Resolve Form Modal / Accordion */}
-          {showResolveForm && (
-            <form onSubmit={handleResolveProofSubmit} className="mt-4 rounded-2xl border border-[#347161]/30 bg-[#f0f7f3] dark:bg-[#0e2924] p-5 space-y-4">
-              <div className="flex items-center gap-2">
-                <CivicIcon name="check" size={18} className="text-[#347161]" />
-                <h3 className="font-serif text-lg font-bold text-[#0d3035] dark:text-[#f6f4ee]">
-                  Closeout Resolution & Field Verification Evidence
-                </h3>
+          {isAuthority ? (
+            <>
+              <div className="flex flex-wrap gap-2.5">
+                {STATUSES.map(s => (
+                  <button
+                    key={s}
+                    type="button"
+                    disabled={updating || report.status === s}
+                    onClick={() => handleStatusChange(s)}
+                    className={`rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wider transition disabled:opacity-50 ${
+                      report.status === s
+                        ? 'bg-[#0d3035] text-white shadow-sm'
+                        : 'border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] text-[#556b68] dark:text-[#95a9a6] hover:bg-[#fffaf0] hover:text-[#0d3035]'
+                    }`}
+                  >
+                    {s.replace('_', ' ')}
+                  </button>
+                ))}
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee] mb-1.5">
-                  Inspecting Agent / Department *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={resolveActor}
-                  onChange={e => setResolveActor(e.target.value)}
-                  className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] px-3.5 py-2.5 text-xs text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29]"
-                />
-              </div>
+              {/* Resolve Form Modal / Accordion */}
+              {showResolveForm && (
+                <form onSubmit={handleResolveProofSubmit} className="mt-4 rounded-2xl border border-[#347161]/30 bg-[#f0f7f3] dark:bg-[#0e2924] p-5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <CivicIcon name="check" size={18} className="text-[#347161]" />
+                    <h3 className="font-serif text-lg font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+                      Closeout Resolution & Field Verification Evidence
+                    </h3>
+                  </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee] mb-1.5">
-                  Technical Resolution Summary *
-                </label>
-                <textarea
-                  required
-                  rows={3}
-                  value={resolveNotes}
-                  onChange={e => setResolveNotes(e.target.value)}
-                  placeholder="Detail corrective actions executed (e.g. Asphalting completed, pipeline sealed, drainage cleared)..."
-                  className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] p-3 text-xs text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29] resize-none"
-                />
-              </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee] mb-1.5">
+                      Inspecting Agent / Department *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={resolveActor}
+                      onChange={e => setResolveActor(e.target.value)}
+                      className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] px-3.5 py-2.5 text-xs text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29]"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee] mb-1.5">
-                  Post-Remediation Completion Photo
-                </label>
-                <CameraCapture
-                  onCapture={(f, previewUrl) => {
-                    setResolveProofFile(f)
-                    setResolveProofPreview(previewUrl)
-                  }}
-                  onClear={() => {
-                    setResolveProofFile(null)
-                    setResolveProofPreview(null)
-                  }}
-                  currentPreview={resolveProofPreview}
-                  label="Repair Completion Photo"
-                />
-              </div>
+                  <div>
+                    <label className="block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee] mb-1.5">
+                      Technical Resolution Summary *
+                    </label>
+                    <textarea
+                      required
+                      rows={3}
+                      value={resolveNotes}
+                      onChange={e => setResolveNotes(e.target.value)}
+                      placeholder="Detail corrective actions executed (e.g. Asphalting completed, pipeline sealed, drainage cleared)..."
+                      className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] p-3 text-xs text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29] resize-none"
+                    />
+                  </div>
 
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="submit"
-                  disabled={resolving || !resolveNotes.trim()}
-                  className="flex-1 rounded-full bg-[#0d3035] py-3 text-xs font-bold uppercase tracking-wider text-white hover:bg-[#16444a] transition"
-                >
-                  {resolving ? 'Publishing Closeout Audit...' : 'Confirm Resolution & Publish Closeout'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowResolveForm(false)}
-                  className="rounded-full border border-[#173e42]/15 px-5 py-3 text-xs font-bold text-[#718481] hover:bg-white"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
+                  <div>
+                    <label className="block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee] mb-1.5">
+                      Post-Remediation Completion Photo
+                    </label>
+                    <CameraCapture
+                      onCapture={(f, previewUrl) => {
+                        setResolveProofFile(f)
+                        setResolveProofPreview(previewUrl)
+                      }}
+                      onClear={() => {
+                        setResolveProofFile(null)
+                        setResolveProofPreview(null)
+                      }}
+                      currentPreview={resolveProofPreview}
+                      label="Repair Completion Photo"
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="submit"
+                      disabled={resolving || !resolveNotes.trim()}
+                      className="flex-1 rounded-full bg-[#0d3035] py-3 text-xs font-bold uppercase tracking-wider text-white hover:bg-[#16444a] transition"
+                    >
+                      {resolving ? 'Publishing Closeout Audit...' : 'Confirm Resolution & Publish Closeout'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowResolveForm(false)}
+                      className="rounded-full border border-[#173e42]/15 px-5 py-3 text-xs font-bold text-[#718481] hover:bg-white"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+            </>
+          ) : (
+            <p className="text-xs text-[#718481] dark:text-[#8ea5a2] py-2">
+              Operational status updates and closeout verifications are restricted to authorized municipal representatives.
+            </p>
           )}
         </div>
 
@@ -649,14 +668,20 @@ export default function ReportDetail() {
                 onChange={e => setCommentForm(f => ({ ...f, author: e.target.value }))}
                 className="rounded-xl border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] px-3.5 py-2.5 text-xs text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29]"
               />
-              <select
-                value={commentForm.role}
-                onChange={e => setCommentForm(f => ({ ...f, role: e.target.value }))}
-                className="rounded-xl border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] px-3.5 py-2.5 text-xs font-semibold text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29]"
-              >
-                <option value="citizen">Citizen Stakeholder</option>
-                <option value="authority">Municipal Authority Representative</option>
-              </select>
+              {isAuthority ? (
+                <select
+                  value={commentForm.role}
+                  onChange={e => setCommentForm(f => ({ ...f, role: e.target.value }))}
+                  className="rounded-xl border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] px-3.5 py-2.5 text-xs font-semibold text-[#ba7c29] outline-none focus:border-[#ba7c29]"
+                >
+                  <option value="authority">Municipal Authority Representative</option>
+                  <option value="citizen">Citizen Stakeholder</option>
+                </select>
+              ) : (
+                <div className="flex items-center px-3.5 py-2.5 rounded-xl border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] text-xs font-semibold text-[#556b68] dark:text-[#95a9a6]">
+                  Citizen Stakeholder
+                </div>
+              )}
             </div>
             <div className="flex gap-2">
               <input

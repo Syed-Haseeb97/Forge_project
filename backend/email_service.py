@@ -5,13 +5,29 @@ from datetime import datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Dict, Any, Optional
+from dotenv import load_dotenv
 
-GMAIL_USER = os.getenv("GMAIL_USER", "syed424893@gmail.com")
-GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "eeyi tjub jsvy yehk")
-EMAIL_FROM = os.getenv("EMAIL_FROM", "Jan Aawaz (जनAawaz) Portal <syed424893@gmail.com>")
+load_dotenv()
 
-# In-memory OTP storage: { normalized_email: { "code": str, "citizen_data": dict, "expires_at": datetime, "attempts": int } }
+GMAIL_USER = os.getenv("GMAIL_USER")
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
+EMAIL_FROM = os.getenv("EMAIL_FROM") or (f"Jan Aawaz (जनAawaz) Portal <{GMAIL_USER}>" if GMAIL_USER else None)
+
+# In-memory OTP storage: { normalized_email: { "code": str, "citizen_data": dict, "expires_at": datetime, "last_sent_at": datetime, "attempts": int } }
 _otp_store: Dict[str, Dict[str, Any]] = {}
+
+
+def check_rate_limit(email: str, min_interval_seconds: int = 30) -> Optional[int]:
+    """
+    Returns seconds remaining if an OTP was sent to this email within min_interval_seconds, else None.
+    """
+    normalized = email.strip().lower()
+    record = _otp_store.get(normalized)
+    if record and "last_sent_at" in record:
+        elapsed = (datetime.utcnow() - record["last_sent_at"]).total_seconds()
+        if elapsed < min_interval_seconds:
+            return int(min_interval_seconds - elapsed) + 1
+    return None
 
 
 def generate_and_store_otp(email: str, citizen_data: Optional[Dict[str, Any]] = None) -> str:
@@ -21,6 +37,7 @@ def generate_and_store_otp(email: str, citizen_data: Optional[Dict[str, Any]] = 
         "code": code,
         "citizen_data": citizen_data or {},
         "expires_at": datetime.utcnow() + timedelta(minutes=10),
+        "last_sent_at": datetime.utcnow(),
         "attempts": 0,
     }
     return code
@@ -48,7 +65,7 @@ def verify_otp_code(email: str, input_code: str) -> bool:
     record["attempts"] += 1
 
     if record["code"] == input_code.strip():
-        # Do not immediately pop so caller can read citizen_data if needed, or pop explicitly
+        # Do not immediately pop so caller can read citizen_data if needed
         return True
 
     return False
@@ -76,7 +93,7 @@ def build_verification_html(code: str, email: str, title: str = "Verify your ema
           <span style="color: #e8b855; font-size: 24px; font-weight: 800; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">जन</span><span style="color: #ffffff; font-size: 24px; font-weight: 800; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">Aawaz</span>
         </div>
         <span style="color: rgba(255, 255, 255, 0.7); font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;">
-          STATUTORY PUBLIC GRIEVANCE & REDRESSAL PORTAL
+          PUBLIC GRIEVANCE & INFRASTRUCTURE REDRESSAL PORTAL
         </span>
       </td>
     </tr>
@@ -128,10 +145,14 @@ def build_verification_html(code: str, email: str, title: str = "Verify your ema
 
 
 def send_verification_email(to_email: str, code: str, title: str = "Verify your email address", greeting: str = "") -> bool:
+    if not GMAIL_USER or not GMAIL_APP_PASSWORD:
+        print(f"[EmailService] Email delivery disabled: GMAIL_USER or GMAIL_APP_PASSWORD not set in environment.")
+        return False
+
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = f"Jan Aawaz (जनAawaz) Verification Code: {code}"
-        msg["From"] = EMAIL_FROM
+        msg["From"] = EMAIL_FROM or f"Jan Aawaz Portal <{GMAIL_USER}>"
         msg["To"] = to_email
 
         plain_text = f"Your Jan Aawaz (जनAawaz) citizen verification code is: {code}\nValid for 10 minutes."
@@ -140,7 +161,7 @@ def send_verification_email(to_email: str, code: str, title: str = "Verify your 
         msg.attach(MIMEText(plain_text, "plain"))
         msg.attach(MIMEText(html_text, "html"))
 
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=12) as server:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=6) as server:
             server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
             server.send_message(msg)
 

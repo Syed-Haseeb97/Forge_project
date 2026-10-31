@@ -83,7 +83,7 @@ export default function Dashboard() {
     setTrackingResult(null)
     try {
       // Look up by ID directly
-      const cleanId = trackingId.replace(/^CL-/i, '').trim()
+      const cleanId = trackingId.replace(/^(JA-2026-|CL-)/i, '').trim()
       const { data } = await axios.get(`/api/reports/${cleanId}`)
       setTrackingResult(data)
     } catch {
@@ -415,7 +415,7 @@ export default function Dashboard() {
                       <input
                         value={trackingId}
                         onChange={e => setTrackingId(e.target.value)}
-                        placeholder="e.g. 1 or CL-2025-18472 or water burst"
+                        placeholder="e.g. 1 or JA-2026-00001 or water burst"
                         className="input pl-10"
                       />
                     </div>
@@ -475,7 +475,7 @@ export default function Dashboard() {
                   <CivicIcon name="check" size={18} />
                 </div>
                 <div>
-                  <p className="text-[10px] text-[#7e8e8b] dark:text-[#95a9a6]">Resolved This Month</p>
+                  <p className="text-[10px] text-[#7e8e8b] dark:text-[#95a9a6]">Resolved</p>
                   <p className="text-sm font-extrabold text-[#0d3035] dark:text-[#f6f4ee]">
                     {stats.resolved + (stats.closed || 0)} issues
                   </p>
@@ -574,16 +574,22 @@ export default function Dashboard() {
                 <div className="flex min-h-[240px] flex-col justify-center rounded-2xl bg-[#0d3035] p-6 text-white shadow-sm">
                   <p className="text-[10px] font-bold tracking-[.15em] text-white/60">SLA COMPLIANCE</p>
                   <p className="mt-2 font-serif text-5xl sm:text-6xl font-bold">
-                    {stats?.sla_compliance_rate || 84}<span className="text-3xl text-[#e8b855]">%</span>
+                    {stats?.total > 0 && stats?.sla_compliance_rate !== undefined ? (
+                      <>
+                        {stats.sla_compliance_rate}<span className="text-3xl text-[#e8b855]">%</span>
+                      </>
+                    ) : (
+                      '—'
+                    )}
                   </p>
                   <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/15">
                     <div
                       className="h-full rounded-full bg-[#e8b855] transition-all duration-500"
-                      style={{ width: `${stats?.sla_compliance_rate || 84}%` }}
+                      style={{ width: `${stats?.total > 0 ? (stats?.sla_compliance_rate || 0) : 0}%` }}
                     />
                   </div>
                   <p className="mt-3 text-xs leading-5 text-white/60">
-                    Average turnaround: {stats?.avg_resolution_hours > 0 ? `${stats.avg_resolution_hours}h` : 'Under 24h'}
+                    Average turnaround: {stats?.avg_resolution_hours > 0 ? `${stats.avg_resolution_hours}h` : '—'}
                   </p>
                 </div>
 

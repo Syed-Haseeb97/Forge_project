@@ -25,7 +25,6 @@ export default function AuthPage() {
     email: '',
     dob: '',
     phone: '',
-    aadhaarLast4: '',
     address: '',
   })
 
@@ -97,12 +96,6 @@ export default function AuthPage() {
       return
     }
 
-    const aadhaarClean = signupForm.aadhaarLast4.trim()
-    if (aadhaarClean.length !== 4 || !/^\d{4}$/.test(aadhaarClean)) {
-      toast.error('Last 4 digits of Aadhaar must be exactly 4 numbers')
-      return
-    }
-
     if (!signupForm.address.trim()) {
       toast.error('Primary residence address is required')
       return
@@ -123,7 +116,6 @@ export default function AuthPage() {
         email: cleanEmail,
         dob: signupForm.dob,
         phone: formattedPhone,
-        aadhaar_last4: aadhaarClean,
         address: signupForm.address.trim(),
       })
       toast.success(data.message || 'Verification code sent to your email!')
@@ -168,19 +160,18 @@ export default function AuthPage() {
             email: activeEmail,
             dob: signupForm.dob,
             phone: formattedPhone,
-            aadhaar_last4: signupForm.aadhaarLast4.trim(),
             address: signupForm.address.trim(),
           },
         })
         toast.success(`Citizen profile created! Welcome, ${data.user.first_name}.`)
-        login(data.user)
+        login(data.user, data.token)
       } else {
         const { data } = await axios.post('/api/auth/verify-code', {
           email: activeEmail,
           code: cleanCode,
         })
         toast.success(`Welcome back, ${data.user.first_name || 'Citizen'}!`)
-        login(data.user)
+        login(data.user, data.token)
       }
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Invalid or expired code. Please try again.')
@@ -450,37 +441,6 @@ export default function AuthPage() {
                 </div>
               </div>
 
-              {/* Last 4 Digits of Aadhaar Card */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee]">
-                    Last 4 Digits of Aadhaar Card <span className="text-[#b04b37]">*</span>
-                  </label>
-                  <span className="text-[10px] text-[#347161] font-semibold">Statutory ID Proof</span>
-                </div>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-3 text-xs font-mono font-bold text-[#70817e] select-none">
-                    •••• ••••
-                  </span>
-                  <input
-                    required
-                    type="text"
-                    maxLength={4}
-                    pattern="[0-9]{4}"
-                    value={signupForm.aadhaarLast4}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, '').slice(0, 4)
-                      setSignupForm(prev => ({ ...prev, aadhaarLast4: val }))
-                    }}
-                    placeholder="1234"
-                    className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] py-3 pl-24 pr-3.5 text-xs sm:text-sm font-mono font-bold tracking-widest text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29]"
-                  />
-                </div>
-                <p className="mt-1 text-[10px] text-[#768784]">
-                  Used strictly for citizen deduplication and public accountability validation.
-                </p>
-              </div>
-
               {/* Primary Address of Residence */}
               <div>
                 <label className="mb-1.5 block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee]">
@@ -586,9 +546,9 @@ export default function AuthPage() {
 
           {/* Privacy Guarantee Note */}
           <div className="mt-8 flex items-start gap-3 rounded-xl border border-[#347161]/20 bg-[#e9efea] dark:bg-[#122824] p-4 text-xs leading-relaxed text-[#405654] dark:text-[#9eb5b1]">
-            <img src="/emblem-india.svg" alt="Emblem of India" className="h-6 w-auto object-contain mt-0.5 shrink-0" />
+            <CivicIcon name="shield" size={18} className="text-[#347161] shrink-0 mt-0.5" />
             <span>
-              Your personal information, address, and Aadhaar identifiers are securely encrypted in the municipal database and never exposed on public dashboards.
+              Your personal information, contact number, and address are securely stored and never exposed on public dashboards.
             </span>
           </div>
         </div>
@@ -608,7 +568,7 @@ export default function AuthPage() {
             />
             <div className="absolute inset-0 bg-gradient-to-t from-[#0d3035]/65 via-transparent to-transparent" />
             <div className="absolute bottom-5 left-5 rounded-full bg-white/90 px-3.5 py-1.5 text-[9px] font-bold tracking-[.14em] text-[#0d3035] uppercase">
-              STATUTORY CITIZEN REGISTRY
+              CITIZEN REGISTRY
             </div>
           </div>
 

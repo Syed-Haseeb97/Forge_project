@@ -28,7 +28,7 @@ class Citizen(Base):
     email = Column(String(255), nullable=False, unique=True, index=True)
     dob = Column(String(20), nullable=False)  # Date of birth (YYYY-MM-DD)
     phone = Column(String(30), nullable=True)  # Optional phone number
-    aadhaar_last4 = Column(String(4), nullable=False)  # Last 4 digits of Aadhaar
+    aadhaar_last4 = Column(String(4), nullable=True)  # Deprecated / Nullable statutory identifier
     address = Column(Text, nullable=False)  # Primary residence address
     is_verified = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -34,11 +34,6 @@ export default function Footer() {
               alt="जनAawaz"
               className="h-9 w-auto object-contain rounded-md"
             />
-            <div className="h-6 w-px bg-white/15 hidden sm:block" />
-            <div className="flex items-center gap-3">
-              <img src="/emblem-india.svg" alt="State Emblem of India" className="h-8 w-auto object-contain" />
-              <img src="/digital-india.svg" alt="Digital India" className="h-6 w-auto object-contain" />
-            </div>
           </div>
 
           <p className="max-w-md text-[11px] leading-5 text-white/50">
@@ -53,7 +48,10 @@ export default function Footer() {
           </div>
         </div>
         <div className="mx-auto mt-8 max-w-[1240px] border-t border-white/10 pt-5 text-center text-[10px] text-white/35 sm:flex sm:justify-between sm:text-left">
-          <p>© 2026 Jan Aawaz (जनAawaz) Public Service Infrastructure. All citizen submissions protected under digital public record charters.</p>
+          <div>
+            <p>© 2026 Jan Aawaz (जनAawaz). All citizen submissions protected under digital public record charters.</p>
+            <p className="mt-1 text-white/45 font-medium">Hackathon prototype, not an official government service.</p>
+          </div>
           <p className="mt-1 sm:mt-0">Powered by Gemini AI Multimodal Triage & Open GIS</p>
         </div>
       </div>

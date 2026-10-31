@@ -22,16 +22,16 @@ export default function Navbar() {
 
   return (
     <>
-      {/* Official Banner Top Strip */}
+      {/* Civic Redressal Top Strip */}
       <div className="bg-[#092225] border-b border-white/10 px-5 py-1.5 text-white/90 transition-colors">
         <div className="mx-auto flex max-w-[1240px] items-center justify-between text-[10px] sm:text-[11px] font-semibold tracking-wider">
           <div className="flex items-center gap-2">
-            <img src="/emblem-india.svg" alt="State Emblem of India" className="h-5 w-auto object-contain" />
-            <span>भारत सरकार | GOVERNMENT OF INDIA</span>
+            <span className="font-bold text-[#e8b855]">जनAawaz</span>
+            <span className="text-white/40">|</span>
+            <span className="text-white/80">Civic Grievance & Infrastructure Redressal</span>
           </div>
-          <div className="flex items-center gap-3 text-white/70">
-            <span className="hidden md:inline">PUBLIC SERVICE REDRESSAL INFRASTRUCTURE</span>
-            <img src="/digital-india.svg" alt="Digital India" className="h-4 sm:h-4.5 w-auto object-contain" />
+          <div className="flex items-center gap-3 text-white/60">
+            <span className="text-[10px]">Hackathon prototype, not an official government service</span>
           </div>
         </div>
       </div>
@@ -106,9 +106,9 @@ export default function Navbar() {
                   <span className="truncate max-w-[150px]">
                     {user.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : user.email}
                   </span>
-                  {user.aadhaar_last4 && (
-                    <span className="hidden xl:inline text-[9px] font-mono px-1.5 py-0.2 rounded bg-black/5 dark:bg-white/10 text-[#4d6d67] dark:text-[#8eb2ab]">
-                      •••• {user.aadhaar_last4}
+                  {user.role === 'authority' && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#ba7c29] text-white uppercase">
+                      Official
                     </span>
                   )}
                 </div>
@@ -176,9 +176,9 @@ export default function Navbar() {
                     <CivicIcon name="shield" size={14} />
                     <span className="truncate">{user.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : user.email}</span>
                   </div>
-                  {user.aadhaar_last4 && (
-                    <p className="mt-0.5 text-[10px] font-mono text-[#527971] dark:text-[#8eaea7]">
-                      Aadhaar: •••• {user.aadhaar_last4}
+                  {user.role === 'authority' && (
+                    <p className="mt-0.5 text-[10px] font-bold text-[#ba7c29] uppercase">
+                      Municipal Authority
                     </p>
                   )}
                 </div>

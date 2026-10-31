@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Response
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Response, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -29,22 +29,37 @@ from email_service import (
     pop_otp,
     get_stored_otp_data,
     send_verification_email,
+    check_rate_limit,
 )
-from sqlalchemy import select
+from auth import (
+    get_current_user,
+    get_optional_current_user,
+    require_authority,
+    create_access_token,
+    get_role_for_email,
+)
+from migrations import ensure_schema
+from sqlalchemy import select, text
 
 load_dotenv()
 
+DEV_MODE = os.getenv("DEV_MODE", "false").lower() in ("true", "1", "yes")
+
 # ── App setup ─────────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="Fordge Civic Triage API",
+    title="Jan Aawaz (जनAawaz) API",
     version="2.0.0",
     description="Transparent Civic Grievance & Infrastructure Triage System with Gemini Multimodal AI and Open311 compliance.",
 )
 
+cors_origins_raw = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000")
+allow_origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
+allow_credentials = "*" not in allow_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=allow_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -56,8 +71,25 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 @app.on_event("startup")
 async def startup():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    await ensure_schema()
+
+
+@app.get("/api/health")
+async def health_check():
+    db_status = "ok"
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+    except Exception as e:
+        db_status = f"unhealthy: {e}"
+
+    return {
+        "status": "ok" if db_status == "ok" else "degraded",
+        "app": "Jan Aawaz (जनAawaz)",
+        "version": "2.0.0",
+        "database": db_status,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────────
@@ -166,10 +198,11 @@ class CitizenOut(BaseModel):
     last_name: str
     email: str
     dob: str
-    phone: Optional[str]
-    aadhaar_last4: str
+    phone: Optional[str] = None
+    aadhaar_last4: Optional[str] = None
     address: str
     is_verified: bool
+    role: str = "citizen"
     created_at: datetime
 
     class Config:
@@ -182,8 +215,8 @@ class RegisterSendCodeRequest(BaseModel):
     email: str
     dob: str
     phone: Optional[str] = None
-    aadhaar_last4: str
     address: str
+    aadhaar_last4: Optional[str] = None
 
 
 class RegisterVerifyCodeRequest(BaseModel):
@@ -208,14 +241,18 @@ async def register_send_code(payload: RegisterSendCodeRequest):
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="A valid email address is required.")
 
+    # Rate limiting: 1 request per 30 seconds per email
+    remaining = check_rate_limit(email, 30)
+    if remaining:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded. Please wait {remaining} seconds before requesting a new code.",
+        )
+
     first_name = payload.first_name.strip()
     last_name = payload.last_name.strip()
     if not first_name or not last_name:
         raise HTTPException(status_code=400, detail="First name and last name are required.")
-
-    aadhaar_clean = payload.aadhaar_last4.strip()
-    if len(aadhaar_clean) != 4 or not aadhaar_clean.isdigit():
-        raise HTTPException(status_code=400, detail="Last 4 digits of Aadhaar must be exactly 4 digits.")
 
     dob = payload.dob.strip()
     if not dob:
@@ -251,7 +288,6 @@ async def register_send_code(payload: RegisterSendCodeRequest):
         "email": email,
         "dob": dob,
         "phone": phone_val,
-        "aadhaar_last4": aadhaar_clean,
         "address": address,
     }
 
@@ -267,15 +303,14 @@ async def register_send_code(payload: RegisterSendCodeRequest):
         first_name,
     )
 
-    if not sent:
-        print(f"[AUTH DEV FALLBACK] Registration code for {email}: {code}")
-        return {
-            "ok": True,
-            "message": "Verification code dispatched to your email.",
-            "dev_code": code,
-        }
+    resp: Dict[str, Any] = {
+        "ok": True,
+        "message": "Verification code dispatched to your email inbox." if sent else "Verification code generated.",
+    }
+    if DEV_MODE:
+        resp["dev_code"] = code
 
-    return {"ok": True, "message": "Verification code sent to your email inbox."}
+    return resp
 
 
 @app.post("/api/auth/register-verify-code")
@@ -314,7 +349,7 @@ async def register_verify_code(payload: RegisterVerifyCodeRequest):
                 email=email,
                 dob=citizen_info["dob"],
                 phone=final_phone,
-                aadhaar_last4=citizen_info["aadhaar_last4"],
+                aadhaar_last4=None,
                 address=citizen_info["address"],
                 is_verified=True,
             )
@@ -323,7 +358,8 @@ async def register_verify_code(payload: RegisterVerifyCodeRequest):
             await session.refresh(citizen)
 
     pop_otp(email)
-    token = f"civic_{uuid.uuid4().hex}"
+    role = get_role_for_email(email)
+    token = create_access_token(email=email, user_id=citizen.id, role=role)
 
     return {
         "ok": True,
@@ -335,9 +371,9 @@ async def register_verify_code(payload: RegisterVerifyCodeRequest):
             "email": citizen.email,
             "dob": citizen.dob,
             "phone": citizen.phone,
-            "aadhaar_last4": citizen.aadhaar_last4,
             "address": citizen.address,
             "verified": True,
+            "role": role,
         },
     }
 
@@ -347,6 +383,14 @@ async def login_send_code(payload: LoginSendCodeRequest):
     email = payload.email.strip().lower()
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="A valid email address is required.")
+
+    # Rate limiting: 1 request per 30 seconds per email
+    remaining = check_rate_limit(email, 30)
+    if remaining:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded. Please wait {remaining} seconds before requesting a new code.",
+        )
 
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(Citizen).where(Citizen.email == email))
@@ -369,15 +413,14 @@ async def login_send_code(payload: LoginSendCodeRequest):
         citizen.first_name,
     )
 
-    if not sent:
-        print(f"[AUTH DEV FALLBACK] Login code for {email}: {code}")
-        return {
-            "ok": True,
-            "message": "Verification code dispatched to your email.",
-            "dev_code": code,
-        }
+    resp: Dict[str, Any] = {
+        "ok": True,
+        "message": "Verification code sent to your email inbox." if sent else "Verification code dispatched.",
+    }
+    if DEV_MODE:
+        resp["dev_code"] = code
 
-    return {"ok": True, "message": "Verification code sent to your email inbox."}
+    return resp
 
 
 @app.post("/api/auth/verify-code")
@@ -394,7 +437,9 @@ async def verify_auth_code(payload: VerifyOtpRequest):
         citizen = result.scalar_one_or_none()
 
     pop_otp(email)
-    token = f"civic_{uuid.uuid4().hex}"
+    role = get_role_for_email(email)
+    user_id = citizen.id if citizen else None
+    token = create_access_token(email=email, user_id=user_id, role=role)
 
     if citizen:
         user_data = {
@@ -404,14 +449,15 @@ async def verify_auth_code(payload: VerifyOtpRequest):
             "email": citizen.email,
             "dob": citizen.dob,
             "phone": citizen.phone,
-            "aadhaar_last4": citizen.aadhaar_last4,
             "address": citizen.address,
             "verified": True,
+            "role": role,
         }
     else:
         user_data = {
             "email": email,
             "verified": True,
+            "role": role,
         }
 
     return {
@@ -438,7 +484,12 @@ async def submit_report(
     longitude: Optional[float] = Form(None),
     citizen_email: Optional[str] = Form(None),
     media: Optional[UploadFile] = File(None),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
+    # Derive citizen_email from authenticated JWT token; ignore the form field
+    actual_citizen_email = current_user.get("sub")
+    citizen_id = current_user.get("user_id")
+
     report_id = str(uuid.uuid4())
     media_url = None
     content = None
@@ -471,10 +522,8 @@ async def submit_report(
 
     now = datetime.utcnow()
     async with AsyncSessionLocal() as session:
-        citizen_id = None
-        if citizen_email:
-            clean_email = citizen_email.strip().lower()
-            res = await session.execute(select(Citizen).where(Citizen.email == clean_email))
+        if not citizen_id and actual_citizen_email:
+            res = await session.execute(select(Citizen).where(Citizen.email == actual_citizen_email.strip().lower()))
             cit = res.scalar_one_or_none()
             if cit:
                 citizen_id = cit.id
@@ -482,7 +531,7 @@ async def submit_report(
         report = Report(
             id=report_id,
             citizen_id=citizen_id,
-            citizen_email=citizen_email.strip().lower() if citizen_email else None,
+            citizen_email=actual_citizen_email.strip().lower() if actual_citizen_email else None,
             title=title,
             description=description,
             category=category,
@@ -683,9 +732,13 @@ async def update_status(
     report_id: str,
     status: str,
     note: Optional[str] = None,
-    actor: str = "Authorized Official",
+    actor: Optional[str] = None,
+    current_authority: Dict[str, Any] = Depends(require_authority),
 ):
     from sqlalchemy import select
+    authority_email = current_authority.get("sub", "authority")
+    official_actor = actor or f"Municipal Authority ({authority_email})"
+
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(Report).where(Report.id == report_id))
         report = result.scalar_one_or_none()
@@ -705,7 +758,7 @@ async def update_status(
             session=session,
             report_id=report_id,
             status=status,
-            actor=actor,
+            actor=official_actor,
             action_type="status_update",
             notes=note or f"Ticket status transitioned to {status.replace('_', ' ').title()}.",
         )
@@ -719,11 +772,15 @@ async def resolve_report_with_proof(
     report_id: str,
     status: str = Form("resolved"),
     resolution_notes: str = Form(...),
-    actor: str = Form("Municipal Engineer"),
+    actor: Optional[str] = Form(None),
     media: Optional[UploadFile] = File(None),
+    current_authority: Dict[str, Any] = Depends(require_authority),
 ):
-    """Closeout ticket with verified resolution notes and photographic completion proof"""
+    """Closeout ticket with verified resolution notes and photographic completion proof (Authority only)"""
     from sqlalchemy import select
+    authority_email = current_authority.get("sub", "authority")
+    official_actor = actor or f"Municipal Authority ({authority_email})"
+
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(Report).where(Report.id == report_id))
         report = result.scalar_one_or_none()
@@ -748,7 +805,7 @@ async def resolve_report_with_proof(
             session=session,
             report_id=report_id,
             status=status,
-            actor=actor,
+            actor=official_actor,
             action_type="resolution_proof",
             notes=f"Issue resolved: {resolution_notes}",
             media_url=resolved_media_url,
@@ -760,7 +817,10 @@ async def resolve_report_with_proof(
 
 
 @app.post("/api/reports/{report_id}/upvote")
-async def upvote_report(report_id: str):
+async def upvote_report(
+    report_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     from sqlalchemy import select
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(Report).where(Report.id == report_id))
@@ -911,7 +971,11 @@ async def get_comments(report_id: str):
 
 
 @app.post("/api/reports/{report_id}/comments", response_model=CommentOut)
-async def add_comment(report_id: str, body: CommentIn):
+async def add_comment(
+    report_id: str,
+    body: CommentIn,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
     from sqlalchemy import select
     async with AsyncSessionLocal() as session:
         r = await session.execute(select(Report).where(Report.id == report_id))
@@ -919,18 +983,28 @@ async def add_comment(report_id: str, body: CommentIn):
         if not report:
             raise HTTPException(404, "Report not found")
 
+        user_role = current_user.get("role", "citizen")
+        if body.role == "authority" and user_role != "authority":
+            raise HTTPException(
+                status_code=403,
+                detail="Municipal authority credentials required to append official updates.",
+            )
+
+        effective_role = "authority" if (user_role == "authority" and body.role == "authority") else "citizen"
+        author_name = body.author.strip() if body.author and body.author != "Anonymous" else current_user.get("sub", "Citizen")
+
         comment = Comment(
             id=str(uuid.uuid4()),
             report_id=report_id,
-            author=body.author[:100] or "Anonymous",
-            role=body.role if body.role in ("citizen", "authority") else "citizen",
+            author=author_name[:100],
+            role=effective_role,
             content=body.content,
             created_at=datetime.utcnow(),
         )
         session.add(comment)
 
         # Log timeline comment note if official
-        if body.role == "authority":
+        if effective_role == "authority":
             await log_timeline(
                 session=session,
                 report_id=report_id,

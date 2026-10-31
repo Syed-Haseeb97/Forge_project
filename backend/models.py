@@ -1,7 +1,7 @@
 """SQLAlchemy ORM models"""
 import enum
 from datetime import datetime
-from sqlalchemy import Column, String, Float, Integer, DateTime, Text, Enum as SAEnum, ForeignKey
+from sqlalchemy import Column, String, Float, Integer, DateTime, Text, Boolean, Enum as SAEnum, ForeignKey
 from database import Base
 
 
@@ -19,10 +19,28 @@ class SeverityEnum(str, enum.Enum):
     critical = "critical"
 
 
+class Citizen(Base):
+    __tablename__ = "citizens"
+
+    id = Column(String(36), primary_key=True)
+    first_name = Column(String(100), nullable=False)
+    last_name = Column(String(100), nullable=False)
+    email = Column(String(255), nullable=False, unique=True, index=True)
+    dob = Column(String(20), nullable=False)  # Date of birth (YYYY-MM-DD)
+    phone = Column(String(30), nullable=True)  # Optional phone number
+    aadhaar_last4 = Column(String(4), nullable=False)  # Last 4 digits of Aadhaar
+    address = Column(Text, nullable=False)  # Primary residence address
+    is_verified = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Report(Base):
     __tablename__ = "reports"
 
     id = Column(String(36), primary_key=True)
+    citizen_id = Column(String(36), ForeignKey("citizens.id", ondelete="SET NULL"), nullable=True, index=True)
+    citizen_email = Column(String(255), nullable=True, index=True)
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=False)
     category = Column(String(50), nullable=False)

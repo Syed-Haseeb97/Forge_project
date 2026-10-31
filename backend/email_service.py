@@ -10,19 +10,25 @@ GMAIL_USER = os.getenv("GMAIL_USER", "syed424893@gmail.com")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "eeyi tjub jsvy yehk")
 EMAIL_FROM = os.getenv("EMAIL_FROM", "CivicLine Public Grievance Portal <syed424893@gmail.com>")
 
-# In-memory OTP storage: { normalized_email: { "code": str, "expires_at": datetime, "attempts": int } }
+# In-memory OTP storage: { normalized_email: { "code": str, "citizen_data": dict, "expires_at": datetime, "attempts": int } }
 _otp_store: Dict[str, Dict[str, Any]] = {}
 
 
-def generate_and_store_otp(email: str) -> str:
+def generate_and_store_otp(email: str, citizen_data: Optional[Dict[str, Any]] = None) -> str:
     normalized = email.strip().lower()
     code = f"{random.randint(100000, 999999)}"
     _otp_store[normalized] = {
         "code": code,
+        "citizen_data": citizen_data or {},
         "expires_at": datetime.utcnow() + timedelta(minutes=10),
         "attempts": 0,
     }
     return code
+
+
+def get_stored_otp_data(email: str) -> Optional[Dict[str, Any]]:
+    normalized = email.strip().lower()
+    return _otp_store.get(normalized)
 
 
 def verify_otp_code(email: str, input_code: str) -> bool:
@@ -42,13 +48,19 @@ def verify_otp_code(email: str, input_code: str) -> bool:
     record["attempts"] += 1
 
     if record["code"] == input_code.strip():
-        _otp_store.pop(normalized, None)
+        # Do not immediately pop so caller can read citizen_data if needed, or pop explicitly
         return True
 
     return False
 
 
-def build_verification_html(code: str, email: str) -> str:
+def pop_otp(email: str) -> Optional[Dict[str, Any]]:
+    normalized = email.strip().lower()
+    return _otp_store.pop(normalized, None)
+
+
+def build_verification_html(code: str, email: str, title: str = "Verify your email address", greeting: str = "") -> str:
+    greeting_html = f"<p style='font-size: 15px; font-weight: 600; color: #0d3035; margin: 0 0 10px 0;'>Dear {greeting},</p>" if greeting else ""
     return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -72,10 +84,11 @@ def build_verification_html(code: str, email: str) -> str:
           SECURE CITIZEN ACCESS
         </div>
         <h1 style="font-size: 26px; font-weight: 700; color: #0d3035; margin: 0 0 14px 0; font-family: Georgia, serif;">
-          Verify your email address
+          {title}
         </h1>
+        {greeting_html}
         <p style="font-size: 14px; line-height: 1.6; color: #5f716e; margin: 0 0 24px 0;">
-          A verification request was initiated for <strong style="color: #0d3035;">{email}</strong> on the CivicLine Public Grievance Portal. Use the official 6-digit authentication code below to complete verification:
+          A citizen verification request was initiated for <strong style="color: #0d3035;">{email}</strong> on the CivicLine Public Grievance Portal. Use the official 6-digit authentication code below:
         </p>
 
         <!-- Code Box -->
@@ -96,7 +109,7 @@ def build_verification_html(code: str, email: str) -> str:
         </p>
 
         <div style="margin-top: 28px; padding-top: 20px; border-top: 1px solid rgba(23, 62, 66, 0.1); font-size: 11px; color: #8a9996; line-height: 1.5;">
-          If you did not request this verification, you can safely disregard this email. Your email is kept strictly confidential and is never displayed publicly on citizen dashboards.
+          If you did not request this verification, you can safely disregard this email. Your citizen record is kept strictly confidential and is never displayed publicly.
         </div>
       </td>
     </tr>
@@ -111,7 +124,7 @@ def build_verification_html(code: str, email: str) -> str:
 </html>"""
 
 
-def send_verification_email(to_email: str, code: str) -> bool:
+def send_verification_email(to_email: str, code: str, title: str = "Verify your email address", greeting: str = "") -> bool:
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = f"CivicLine Verification Code: {code}"
@@ -119,7 +132,7 @@ def send_verification_email(to_email: str, code: str) -> bool:
         msg["To"] = to_email
 
         plain_text = f"Your CivicLine citizen verification code is: {code}\nValid for 10 minutes."
-        html_text = build_verification_html(code, to_email)
+        html_text = build_verification_html(code, to_email, title=title, greeting=greeting)
 
         msg.attach(MIMEText(plain_text, "plain"))
         msg.attach(MIMEText(html_text, "html"))

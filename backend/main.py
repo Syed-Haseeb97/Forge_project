@@ -20,10 +20,17 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from database import engine, AsyncSessionLocal, Base
-from models import Report, ReportTimeline, Comment, StatusEnum, SeverityEnum
+from models import Report, ReportTimeline, Comment, Citizen, StatusEnum, SeverityEnum
 from gemini_service import analyze_report, ROUTING_MAP
 from storage_service import save_media, UPLOAD_DIR
-from email_service import generate_and_store_otp, verify_otp_code, send_verification_email
+from email_service import (
+    generate_and_store_otp,
+    verify_otp_code,
+    pop_otp,
+    get_stored_otp_data,
+    send_verification_email,
+)
+from sqlalchemy import select
 
 load_dotenv()
 
@@ -153,7 +160,39 @@ async def log_timeline(
     session.add(entry)
 
 
-class SendOtpRequest(BaseModel):
+class CitizenOut(BaseModel):
+    id: str
+    first_name: str
+    last_name: str
+    email: str
+    dob: str
+    phone: Optional[str]
+    aadhaar_last4: str
+    address: str
+    is_verified: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class RegisterSendCodeRequest(BaseModel):
+    first_name: str
+    last_name: str
+    email: str
+    dob: str
+    phone: Optional[str] = None
+    aadhaar_last4: str
+    address: str
+
+
+class RegisterVerifyCodeRequest(BaseModel):
+    email: str
+    code: str
+    registration_data: Optional[Dict[str, Any]] = None
+
+
+class LoginSendCodeRequest(BaseModel):
     email: str
 
 
@@ -163,26 +202,163 @@ class VerifyOtpRequest(BaseModel):
 
 
 # ── Citizen Authentication Routes ──────────────────────────────────────────────
-@app.post("/api/auth/send-code")
-async def send_auth_code(payload: SendOtpRequest):
+@app.post("/api/auth/register-send-code")
+async def register_send_code(payload: RegisterSendCodeRequest):
     email = payload.email.strip().lower()
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="A valid email address is required.")
 
-    code = generate_and_store_otp(email)
+    first_name = payload.first_name.strip()
+    last_name = payload.last_name.strip()
+    if not first_name or not last_name:
+        raise HTTPException(status_code=400, detail="First name and last name are required.")
+
+    aadhaar_clean = payload.aadhaar_last4.strip()
+    if len(aadhaar_clean) != 4 or not aadhaar_clean.isdigit():
+        raise HTTPException(status_code=400, detail="Last 4 digits of Aadhaar must be exactly 4 digits.")
+
+    dob = payload.dob.strip()
+    if not dob:
+        raise HTTPException(status_code=400, detail="Date of birth is required.")
+
+    address = payload.address.strip()
+    if not address:
+        raise HTTPException(status_code=400, detail="Primary residence address is required.")
+
+    # Check if citizen already registered
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(Citizen).where(Citizen.email == email))
+        existing = result.scalar_one_or_none()
+        if existing:
+            raise HTTPException(
+                status_code=400,
+                detail="An account with this email is already registered. Please sign in instead.",
+            )
+
+    citizen_dict = {
+        "first_name": first_name,
+        "last_name": last_name,
+        "email": email,
+        "dob": dob,
+        "phone": payload.phone.strip() if payload.phone else None,
+        "aadhaar_last4": aadhaar_clean,
+        "address": address,
+    }
+
+    code = generate_and_store_otp(email, citizen_dict)
 
     loop = asyncio.get_event_loop()
-    sent = await loop.run_in_executor(None, send_verification_email, email, code)
+    sent = await loop.run_in_executor(
+        None,
+        send_verification_email,
+        email,
+        code,
+        "Citizen Registration Verification",
+        first_name,
+    )
+
     if not sent:
-        print(f"[AUTH DEV FALLBACK] Verification code for {email}: {code}")
-        return JSONResponse(
-            status_code=200,
-            content={
-                "ok": True,
-                "message": "Verification code dispatched.",
-                "dev_code": code,
-            },
+        print(f"[AUTH DEV FALLBACK] Registration code for {email}: {code}")
+        return {
+            "ok": True,
+            "message": "Verification code dispatched to your email.",
+            "dev_code": code,
+        }
+
+    return {"ok": True, "message": "Verification code sent to your email inbox."}
+
+
+@app.post("/api/auth/register-verify-code")
+async def register_verify_code(payload: RegisterVerifyCodeRequest):
+    email = payload.email.strip().lower()
+    if not verify_otp_code(email, payload.code):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid or expired verification code. Please request a new code.",
         )
+
+    stored = get_stored_otp_data(email)
+    citizen_info = payload.registration_data or (stored.get("citizen_data") if stored else None)
+    if not citizen_info:
+        raise HTTPException(
+            status_code=400,
+            detail="Registration session expired. Please re-submit your registration form.",
+        )
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(Citizen).where(Citizen.email == email))
+        citizen = result.scalar_one_or_none()
+        if not citizen:
+            citizen = Citizen(
+                id=str(uuid.uuid4()),
+                first_name=citizen_info["first_name"],
+                last_name=citizen_info["last_name"],
+                email=email,
+                dob=citizen_info["dob"],
+                phone=citizen_info.get("phone"),
+                aadhaar_last4=citizen_info["aadhaar_last4"],
+                address=citizen_info["address"],
+                is_verified=True,
+            )
+            session.add(citizen)
+            await session.commit()
+            await session.refresh(citizen)
+
+    pop_otp(email)
+    token = f"civic_{uuid.uuid4().hex}"
+
+    return {
+        "ok": True,
+        "token": token,
+        "user": {
+            "id": citizen.id,
+            "first_name": citizen.first_name,
+            "last_name": citizen.last_name,
+            "email": citizen.email,
+            "dob": citizen.dob,
+            "phone": citizen.phone,
+            "aadhaar_last4": citizen.aadhaar_last4,
+            "address": citizen.address,
+            "verified": True,
+        },
+    }
+
+
+@app.post("/api/auth/login-send-code")
+async def login_send_code(payload: LoginSendCodeRequest):
+    email = payload.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="A valid email address is required.")
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(Citizen).where(Citizen.email == email))
+        citizen = result.scalar_one_or_none()
+        if not citizen:
+            raise HTTPException(
+                status_code=404,
+                detail="No registered citizen profile found with this email. Please sign up first.",
+            )
+
+    code = generate_and_store_otp(email, {"citizen_id": citizen.id})
+
+    loop = asyncio.get_event_loop()
+    sent = await loop.run_in_executor(
+        None,
+        send_verification_email,
+        email,
+        code,
+        "Citizen Sign-In Verification",
+        citizen.first_name,
+    )
+
+    if not sent:
+        print(f"[AUTH DEV FALLBACK] Login code for {email}: {code}")
+        return {
+            "ok": True,
+            "message": "Verification code dispatched to your email.",
+            "dev_code": code,
+        }
+
     return {"ok": True, "message": "Verification code sent to your email inbox."}
 
 
@@ -190,18 +366,47 @@ async def send_auth_code(payload: SendOtpRequest):
 async def verify_auth_code(payload: VerifyOtpRequest):
     email = payload.email.strip().lower()
     if not verify_otp_code(email, payload.code):
-        raise HTTPException(status_code=400, detail="Invalid or expired verification code. Please request a new code.")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid or expired verification code. Please request a new code.",
+        )
 
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(Citizen).where(Citizen.email == email))
+        citizen = result.scalar_one_or_none()
+
+    pop_otp(email)
     token = f"civic_{uuid.uuid4().hex}"
+
+    if citizen:
+        user_data = {
+            "id": citizen.id,
+            "first_name": citizen.first_name,
+            "last_name": citizen.last_name,
+            "email": citizen.email,
+            "dob": citizen.dob,
+            "phone": citizen.phone,
+            "aadhaar_last4": citizen.aadhaar_last4,
+            "address": citizen.address,
+            "verified": True,
+        }
+    else:
+        user_data = {
+            "email": email,
+            "verified": True,
+        }
+
     return {
         "ok": True,
         "token": token,
-        "user": {
-            "email": email,
-            "verified": True,
-            "verified_at": datetime.utcnow().isoformat(),
-        },
+        "user": user_data,
     }
+
+
+# Backwards compatibility alias
+@app.post("/api/auth/send-code")
+async def send_auth_code(payload: LoginSendCodeRequest):
+    return await login_send_code(payload)
 
 
 # ── Core Routes ────────────────────────────────────────────────────────────────
@@ -213,6 +418,7 @@ async def submit_report(
     location: str = Form(...),
     latitude: Optional[float] = Form(None),
     longitude: Optional[float] = Form(None),
+    citizen_email: Optional[str] = Form(None),
     media: Optional[UploadFile] = File(None),
 ):
     report_id = str(uuid.uuid4())
@@ -247,8 +453,18 @@ async def submit_report(
 
     now = datetime.utcnow()
     async with AsyncSessionLocal() as session:
+        citizen_id = None
+        if citizen_email:
+            clean_email = citizen_email.strip().lower()
+            res = await session.execute(select(Citizen).where(Citizen.email == clean_email))
+            cit = res.scalar_one_or_none()
+            if cit:
+                citizen_id = cit.id
+
         report = Report(
             id=report_id,
+            citizen_id=citizen_id,
+            citizen_email=citizen_email.strip().lower() if citizen_email else None,
             title=title,
             description=description,
             category=category,

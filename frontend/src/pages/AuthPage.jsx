@@ -11,8 +11,24 @@ export default function AuthPage() {
   const { login } = useAuth()
   const { isDark, toggleTheme } = useTheme()
 
-  const [step, setStep] = useState('email') // 'email' | 'otp'
-  const [email, setEmail] = useState('')
+  const [mode, setMode] = useState('login') // 'login' | 'signup'
+  const [step, setStep] = useState('form') // 'form' | 'otp'
+
+  // Login form state
+  const [loginEmail, setLoginEmail] = useState('')
+
+  // Signup form state
+  const [signupForm, setSignupForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    dob: '',
+    phone: '',
+    aadhaarLast4: '',
+    address: '',
+  })
+
+  // OTP Verification state
   const [otp, setOtp] = useState('')
   const [sending, setSending] = useState(false)
   const [verifying, setVerifying] = useState(false)
@@ -27,29 +43,99 @@ export default function AuthPage() {
     return () => clearInterval(timer)
   }, [cooldown])
 
-  // Handle sending verification email
-  const handleSendCode = async (e) => {
+  const setSignupField = (field) => (e) => {
+    setSignupForm(prev => ({ ...prev, [field]: e.target.value }))
+  }
+
+  // Handle Login: Send OTP to existing registered citizen
+  const handleLoginSendCode = async (e) => {
     e?.preventDefault()
-    const cleanEmail = email.trim().toLowerCase()
+    const cleanEmail = loginEmail.trim().toLowerCase()
     if (!cleanEmail || !cleanEmail.includes('@')) {
-      toast.error('Please enter a valid citizen email address')
+      toast.error('Please enter a valid registered email address')
       return
     }
 
     setSending(true)
     try {
-      const { data } = await axios.post('/api/auth/send-code', { email: cleanEmail })
-      toast.success(data.message || 'Verification code sent to your inbox!')
+      const { data } = await axios.post('/api/auth/login-send-code', { email: cleanEmail })
+      toast.success(data.message || 'Verification code sent to your email!')
       setStep('otp')
       setCooldown(60)
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to dispatch verification code')
+      const status = err.response?.status
+      const detail = err.response?.data?.detail
+      if (status === 404) {
+        toast.error('No citizen profile found for this email. Please sign up first!')
+        setSignupForm(prev => ({ ...prev, email: cleanEmail }))
+        setMode('signup')
+      } else {
+        toast.error(detail || 'Failed to dispatch verification code')
+      }
     } finally {
       setSending(false)
     }
   }
 
-  // Handle verifying OTP code
+  // Handle Sign Up: Send OTP with citizen registration data
+  const handleSignupSendCode = async (e) => {
+    e?.preventDefault()
+    const cleanEmail = signupForm.email.trim().toLowerCase()
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      toast.error('Please enter a valid email address')
+      return
+    }
+
+    if (!signupForm.firstName.trim() || !signupForm.lastName.trim()) {
+      toast.error('First and last name are required')
+      return
+    }
+
+    if (!signupForm.dob) {
+      toast.error('Date of birth is required')
+      return
+    }
+
+    const aadhaarClean = signupForm.aadhaarLast4.trim()
+    if (aadhaarClean.length !== 4 || !/^\d{4}$/.test(aadhaarClean)) {
+      toast.error('Last 4 digits of Aadhaar must be exactly 4 numbers')
+      return
+    }
+
+    if (!signupForm.address.trim()) {
+      toast.error('Primary residence address is required')
+      return
+    }
+
+    setSending(true)
+    try {
+      const { data } = await axios.post('/api/auth/register-send-code', {
+        first_name: signupForm.firstName.trim(),
+        last_name: signupForm.lastName.trim(),
+        email: cleanEmail,
+        dob: signupForm.dob,
+        phone: signupForm.phone.trim() || null,
+        aadhaar_last4: aadhaarClean,
+        address: signupForm.address.trim(),
+      })
+      toast.success(data.message || 'Verification code sent to your email!')
+      setStep('otp')
+      setCooldown(60)
+    } catch (err) {
+      const detail = err.response?.data?.detail
+      if (detail && detail.includes('already registered')) {
+        toast.error('This email is already registered. Please sign in instead.')
+        setLoginEmail(cleanEmail)
+        setMode('login')
+      } else {
+        toast.error(detail || 'Failed to send registration code')
+      }
+    } finally {
+      setSending(false)
+    }
+  }
+
+  // Handle Verify Code (works for both Login & Signup)
   const handleVerifyCode = async (e) => {
     e?.preventDefault()
     const cleanCode = otp.trim()
@@ -58,14 +144,34 @@ export default function AuthPage() {
       return
     }
 
+    const activeEmail = mode === 'signup' ? signupForm.email.trim().toLowerCase() : loginEmail.trim().toLowerCase()
+
     setVerifying(true)
     try {
-      const { data } = await axios.post('/api/auth/verify-code', {
-        email: email.trim().toLowerCase(),
-        code: cleanCode,
-      })
-      toast.success('Citizen identity verified! Welcome to CivicLine.')
-      login(data.user)
+      if (mode === 'signup') {
+        const { data } = await axios.post('/api/auth/register-verify-code', {
+          email: activeEmail,
+          code: cleanCode,
+          registration_data: {
+            first_name: signupForm.firstName.trim(),
+            last_name: signupForm.lastName.trim(),
+            email: activeEmail,
+            dob: signupForm.dob,
+            phone: signupForm.phone.trim() || null,
+            aadhaar_last4: signupForm.aadhaarLast4.trim(),
+            address: signupForm.address.trim(),
+          },
+        })
+        toast.success(`Citizen profile created! Welcome, ${data.user.first_name}.`)
+        login(data.user)
+      } else {
+        const { data } = await axios.post('/api/auth/verify-code', {
+          email: activeEmail,
+          code: cleanCode,
+        })
+        toast.success(`Welcome back, ${data.user.first_name || 'Citizen'}!`)
+        login(data.user)
+      }
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Invalid or expired code. Please try again.')
     } finally {
@@ -73,10 +179,12 @@ export default function AuthPage() {
     }
   }
 
+  const activeEmail = mode === 'signup' ? signupForm.email : loginEmail
+
   return (
-    <main className="grid min-h-screen bg-[#f6f4ee] dark:bg-[#06181b] text-[#102a2f] dark:text-[#f6f4ee] lg:grid-cols-[.92fr_1.08fr] transition-colors">
+    <main className="grid min-h-screen bg-[#f6f4ee] dark:bg-[#06181b] text-[#102a2f] dark:text-[#f6f4ee] lg:grid-cols-[1fr_1fr] transition-colors">
       {/* Left Form Column */}
-      <section className="flex min-h-screen flex-col px-6 py-8 sm:px-12 lg:px-16">
+      <section className="flex min-h-screen flex-col px-6 py-8 sm:px-12 lg:px-16 overflow-y-auto">
         <div className="flex items-center justify-between">
           <Brand />
           <button
@@ -89,27 +197,70 @@ export default function AuthPage() {
           </button>
         </div>
 
-        <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center py-10">
-          <div className="inline-flex items-center gap-2 w-fit rounded-full border border-[#bd7f23]/25 bg-[#fffaf0] dark:bg-[#0d3035] px-3.5 py-1.5 text-[10px] font-bold tracking-[.16em] uppercase text-[#ba7c29] dark:text-[#e8b855]">
-            <CivicIcon name="shield" size={13} className="text-[#347161]" />
-            SECURE CITIZEN ACCESS
+        <div className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center py-8">
+          {/* Top Status & Mode Toggle */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#bd7f23]/25 bg-[#fffaf0] dark:bg-[#0d3035] px-3.5 py-1.5 text-[10px] font-bold tracking-[.16em] uppercase text-[#ba7c29] dark:text-[#e8b855] w-fit">
+              <CivicIcon name="shield" size={13} className="text-[#347161]" />
+              CITIZEN AUTHENTICATION
+            </div>
+
+            {step === 'form' && (
+              <div className="flex rounded-full border border-[#173e42]/15 bg-white/70 dark:bg-[#0b2529] p-1 w-fit">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('login')
+                    setStep('form')
+                  }}
+                  className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
+                    mode === 'login'
+                      ? 'bg-[#0d3035] text-white shadow-sm'
+                      : 'text-[#617471] dark:text-[#8ea5a2] hover:text-[#0d3035] dark:hover:text-white'
+                  }`}
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('signup')
+                    setStep('form')
+                  }}
+                  className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
+                    mode === 'signup'
+                      ? 'bg-[#0d3035] text-white shadow-sm'
+                      : 'text-[#617471] dark:text-[#8ea5a2] hover:text-[#0d3035] dark:hover:text-white'
+                  }`}
+                >
+                  Sign Up
+                </button>
+              </div>
+            )}
           </div>
 
-          <h1 className="mt-4 font-serif text-3xl sm:text-5xl font-bold tracking-tight text-[#0d3035] dark:text-[#f6f4ee]">
-            {step === 'email' ? 'Welcome to CivicLine' : 'Enter Verification Code'}
+          <h1 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight text-[#0d3035] dark:text-[#f6f4ee]">
+            {step === 'otp'
+              ? 'Enter Verification Code'
+              : mode === 'login'
+              ? 'Sign in to CivicLine'
+              : 'Create Citizen Profile'}
           </h1>
 
-          <p className="mt-3 text-xs sm:text-sm leading-relaxed text-[#687976] dark:text-[#95a9a6]">
-            {step === 'email'
-              ? 'Verify your email to access the municipal grievance portal, file complaints with direct camera proof, and monitor resolution timelines.'
-              : `We sent a 6-digit verification code to ${email}. Please enter it below to authenticate and enter the portal.`}
+          <p className="mt-2 text-xs sm:text-sm leading-relaxed text-[#687976] dark:text-[#95a9a6]">
+            {step === 'otp'
+              ? `We sent a 6-digit verification code to ${activeEmail}. Enter it below to complete authentication.`
+              : mode === 'login'
+              ? 'Enter your registered email address to access your complaints, monitor engineering resolution dockets, and track responses.'
+              : 'Register your citizen profile in the public municipal database to file complaints, attach verified evidence, and receive transparent updates.'}
           </p>
 
-          {step === 'email' ? (
-            <form onSubmit={handleSendCode} className="mt-8 space-y-4">
+          {/* Form Step: Sign In */}
+          {step === 'form' && mode === 'login' && (
+            <form onSubmit={handleLoginSendCode} className="mt-8 space-y-4">
               <div>
                 <label className="mb-2 block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee]">
-                  Citizen Email Address <span className="text-[#b04b37]">*</span>
+                  Registered Citizen Email <span className="text-[#b04b37]">*</span>
                 </label>
                 <div className="relative">
                   <CivicIcon name="mail" size={18} className="absolute left-4 top-4 text-[#70817e]" />
@@ -117,8 +268,8 @@ export default function AuthPage() {
                     required
                     type="email"
                     autoFocus
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
                     placeholder="citizen@example.com"
                     className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] py-3.5 pl-11 pr-4 text-sm text-[#0d3035] dark:text-[#f6f4ee] outline-none placeholder:text-[#95a5a3] focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition"
                   />
@@ -130,11 +281,177 @@ export default function AuthPage() {
                 disabled={sending}
                 className="flex w-full items-center justify-center gap-3 rounded-xl bg-[#0d3035] px-6 py-4 text-xs font-bold uppercase tracking-wider text-white transition hover:bg-[#16444a] disabled:opacity-60 shadow-md"
               >
-                {sending ? 'Sending Verification Code...' : 'CONTINUE WITH EMAIL'}
+                {sending ? 'Sending Verification Code...' : 'SIGN IN WITH EMAIL'}
                 <CivicIcon name="arrow" size={16} />
               </button>
+
+              <div className="text-center pt-2">
+                <span className="text-xs text-[#70817e]">New here? </span>
+                <button
+                  type="button"
+                  onClick={() => setMode('signup')}
+                  className="text-xs font-bold text-[#ba7c29] hover:underline"
+                >
+                  Create citizen profile (Sign up)
+                </button>
+              </div>
             </form>
-          ) : (
+          )}
+
+          {/* Form Step: Sign Up (Registration) */}
+          {step === 'form' && mode === 'signup' && (
+            <form onSubmit={handleSignupSendCode} className="mt-6 space-y-4">
+              {/* First & Last Name */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+                    First Name <span className="text-[#b04b37]">*</span>
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    value={signupForm.firstName}
+                    onChange={setSignupField('firstName')}
+                    placeholder="e.g. Aarav"
+                    className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] px-3.5 py-3 text-xs sm:text-sm text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29]"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+                    Last Name <span className="text-[#b04b37]">*</span>
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    value={signupForm.lastName}
+                    onChange={setSignupField('lastName')}
+                    placeholder="e.g. Sharma"
+                    className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] px-3.5 py-3 text-xs sm:text-sm text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29]"
+                  />
+                </div>
+              </div>
+
+              {/* Email Address */}
+              <div>
+                <label className="mb-1.5 block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+                  Citizen Email Address <span className="text-[#b04b37]">*</span>
+                </label>
+                <div className="relative">
+                  <CivicIcon name="mail" size={17} className="absolute left-3.5 top-3.5 text-[#70817e]" />
+                  <input
+                    required
+                    type="email"
+                    value={signupForm.email}
+                    onChange={setSignupField('email')}
+                    placeholder="aarav.sharma@example.com"
+                    className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] py-3 pl-10 pr-3.5 text-xs sm:text-sm text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29]"
+                  />
+                </div>
+              </div>
+
+              {/* DOB & Phone (Optional) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+                    Date of Birth (DOB) <span className="text-[#b04b37]">*</span>
+                  </label>
+                  <input
+                    required
+                    type="date"
+                    value={signupForm.dob}
+                    onChange={setSignupField('dob')}
+                    max={new Date().toISOString().split('T')[0]}
+                    className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] px-3.5 py-3 text-xs sm:text-sm text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29]"
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+                      Phone Number
+                    </label>
+                    <span className="text-[10px] text-[#70817e]">Optional</span>
+                  </div>
+                  <input
+                    type="tel"
+                    value={signupForm.phone}
+                    onChange={setSignupField('phone')}
+                    placeholder="+91 98765 43210"
+                    className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] px-3.5 py-3 text-xs sm:text-sm text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29]"
+                  />
+                </div>
+              </div>
+
+              {/* Last 4 Digits of Aadhaar Card */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+                    Last 4 Digits of Aadhaar Card <span className="text-[#b04b37]">*</span>
+                  </label>
+                  <span className="text-[10px] text-[#347161] font-semibold">Statutory ID Proof</span>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-3 text-xs font-mono font-bold text-[#70817e] select-none">
+                    •••• ••••
+                  </span>
+                  <input
+                    required
+                    type="text"
+                    maxLength={4}
+                    pattern="[0-9]{4}"
+                    value={signupForm.aadhaarLast4}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '').slice(0, 4)
+                      setSignupForm(prev => ({ ...prev, aadhaarLast4: val }))
+                    }}
+                    placeholder="1234"
+                    className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] py-3 pl-24 pr-3.5 text-xs sm:text-sm font-mono font-bold tracking-widest text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29]"
+                  />
+                </div>
+                <p className="mt-1 text-[10px] text-[#768784]">
+                  Used strictly for citizen deduplication and public accountability validation.
+                </p>
+              </div>
+
+              {/* Primary Address of Residence */}
+              <div>
+                <label className="mb-1.5 block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+                  Primary Address of Residence <span className="text-[#b04b37]">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={2}
+                  value={signupForm.address}
+                  onChange={setSignupField('address')}
+                  placeholder="House/Flat number, Street name, Ward/Sector, City, Pin Code"
+                  className="w-full resize-none rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] p-3 text-xs sm:text-sm text-[#0d3035] dark:text-[#f6f4ee] outline-none focus:border-[#ba7c29]"
+                />
+              </div>
+
+              {/* Submit Sign Up */}
+              <button
+                type="submit"
+                disabled={sending}
+                className="flex w-full items-center justify-center gap-3 rounded-xl bg-[#0d3035] px-6 py-4 text-xs font-bold uppercase tracking-wider text-white transition hover:bg-[#16444a] disabled:opacity-60 shadow-md"
+              >
+                {sending ? 'Sending Verification Code...' : 'VERIFY EMAIL & CREATE PROFILE'}
+                <CivicIcon name="arrow" size={16} />
+              </button>
+
+              <div className="text-center pt-2">
+                <span className="text-xs text-[#70817e]">Already registered? </span>
+                <button
+                  type="button"
+                  onClick={() => setMode('login')}
+                  className="text-xs font-bold text-[#ba7c29] hover:underline"
+                >
+                  Sign in to account
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* OTP Step (Both Modes) */}
+          {step === 'otp' && (
             <form onSubmit={handleVerifyCode} className="mt-8 space-y-5">
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -143,10 +460,10 @@ export default function AuthPage() {
                   </label>
                   <button
                     type="button"
-                    onClick={() => setStep('email')}
+                    onClick={() => setStep('form')}
                     className="text-[11px] font-bold text-[#ba7c29] hover:underline"
                   >
-                    Change email
+                    Edit information
                   </button>
                 </div>
 
@@ -159,7 +476,7 @@ export default function AuthPage() {
                     pattern="[0-9]{6}"
                     value={otp}
                     onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, '')
+                      const val = e.target.value.replace(/\D/g, '').slice(0, 6)
                       setOtp(val)
                       if (val.length === 6) {
                         setTimeout(() => handleVerifyCode(), 100)
@@ -176,7 +493,7 @@ export default function AuthPage() {
                 <button
                   type="button"
                   disabled={cooldown > 0 || sending}
-                  onClick={handleSendCode}
+                  onClick={mode === 'signup' ? handleSignupSendCode : handleLoginSendCode}
                   className="font-bold text-[#ba7c29] hover:underline disabled:opacity-50 disabled:no-underline"
                 >
                   {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend Code'}
@@ -188,7 +505,11 @@ export default function AuthPage() {
                 disabled={verifying || otp.length !== 6}
                 className="flex w-full items-center justify-center gap-3 rounded-xl bg-[#e8b855] px-6 py-4 text-xs font-extrabold uppercase tracking-wider text-[#0d3035] transition hover:bg-[#efc56b] disabled:opacity-60 shadow-md"
               >
-                {verifying ? 'Verifying Code...' : 'VERIFY & ENTER PORTAL'}
+                {verifying
+                  ? 'Verifying Code...'
+                  : mode === 'signup'
+                  ? 'VERIFY & SAVE CITIZEN PROFILE'
+                  : 'VERIFY & ENTER PORTAL'}
                 <CivicIcon name="check" size={17} />
               </button>
             </form>
@@ -198,7 +519,7 @@ export default function AuthPage() {
           <div className="mt-8 flex items-start gap-3 rounded-xl border border-[#347161]/20 bg-[#e9efea] dark:bg-[#122824] p-4 text-xs leading-relaxed text-[#405654] dark:text-[#9eb5b1]">
             <CivicIcon name="shield" size={18} className="mt-0.5 shrink-0 text-[#3f776b]" />
             <span>
-              Your contact information is strictly confidential. Citizen emails and personal coordinates are never published on the public municipal dashboard.
+              Your personal information, address, and Aadhaar identifiers are securely encrypted in the municipal database and never exposed on public dashboards.
             </span>
           </div>
         </div>
@@ -218,7 +539,7 @@ export default function AuthPage() {
             />
             <div className="absolute inset-0 bg-gradient-to-t from-[#0d3035]/65 via-transparent to-transparent" />
             <div className="absolute bottom-5 left-5 rounded-full bg-white/90 px-3.5 py-1.5 text-[9px] font-bold tracking-[.14em] text-[#0d3035] uppercase">
-              COMMUNITY IN ACTION
+              STATUTORY CITIZEN REGISTRY
             </div>
           </div>
 
@@ -252,7 +573,7 @@ export default function AuthPage() {
             “Public problems deserve visible progress, not silent paperwork.”
           </blockquote>
           <p className="mt-4 max-w-lg text-xs sm:text-sm leading-relaxed text-white/60">
-            One secure citizen account keeps all your submitted infrastructure reports, photo evidence, and engineering responses in one transparent place.
+            Authenticated citizen records ensure municipal accountability, prevent duplicate work orders, and connect residents directly to engineering teams.
           </p>
         </div>
       </section>

@@ -247,9 +247,12 @@ export default function SubmitReport() {
                   <h1 className="mt-3 font-serif text-3xl sm:text-4xl font-bold tracking-tight text-[#0d3035] dark:text-[#f6f4ee]">
                     Tell us what happened
                   </h1>
-                  <div className="mt-2.5 flex items-center gap-2 text-xs font-semibold text-[#2f7661] dark:text-[#70b99e] bg-[#e3f0ea] dark:bg-[#123830] px-3 py-1 rounded-full w-fit">
+                  <div className="mt-2.5 flex items-center gap-2 text-xs font-semibold text-[#2f7661] dark:text-[#70b99e] bg-[#e3f0ea] dark:bg-[#123830] px-3 py-1.5 rounded-full w-fit border border-[#347161]/20">
                     <CivicIcon name="check" size={13} />
-                    <span>Verified Citizen Account: {user?.email}</span>
+                    <span>
+                      Verified Citizen: {user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : user?.email}
+                      {user?.aadhaar_last4 && ` · UID: •••• ${user.aadhaar_last4}`}
+                    </span>
                   </div>
                   <p className="mt-2 text-xs sm:text-sm text-[#5f716e] dark:text-[#95a9a6]">
                     Provide details or evidence. AI assesses urgency and assigns statutory resolution deadlines.

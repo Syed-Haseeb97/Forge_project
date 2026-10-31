@@ -92,10 +92,17 @@ export default function Navbar() {
             {/* Authentication Status / Sign In / Sign Out */}
             {isVerified ? (
               <div className="flex items-center gap-2.5">
-                <span className="flex items-center gap-1.5 rounded-full bg-[#e3f0ea] dark:bg-[#123830] px-3 py-1.5 text-xs font-bold text-[#2f7661] dark:text-[#70b99e] border border-[#347161]/20">
+                <div className="flex items-center gap-1.5 rounded-full bg-[#e3f0ea] dark:bg-[#123830] px-3.5 py-1.5 text-xs font-bold text-[#2f7661] dark:text-[#70b99e] border border-[#347161]/20">
                   <CivicIcon name="shield" size={13} />
-                  <span className="truncate max-w-[140px]">{user.email}</span>
-                </span>
+                  <span className="truncate max-w-[150px]">
+                    {user.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : user.email}
+                  </span>
+                  {user.aadhaar_last4 && (
+                    <span className="hidden xl:inline text-[9px] font-mono px-1.5 py-0.2 rounded bg-black/5 dark:bg-white/10 text-[#4d6d67] dark:text-[#8eb2ab]">
+                      •••• {user.aadhaar_last4}
+                    </span>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={handleSignOut}
@@ -154,15 +161,22 @@ export default function Navbar() {
         {menuOpen && (
           <div className="border-t border-[#173e42]/10 bg-[#f6f4ee] dark:bg-[#06181b] p-5 lg:hidden animate-fadeIn space-y-4">
             {isVerified ? (
-              <div className="flex items-center justify-between p-3 rounded-xl bg-[#e3f0ea] dark:bg-[#123830] text-xs font-bold text-[#2f7661] dark:text-[#70b99e]">
-                <span className="flex items-center gap-1.5 truncate">
-                  <CivicIcon name="shield" size={14} />
-                  <span className="truncate">{user.email}</span>
-                </span>
+              <div className="flex items-center justify-between p-3.5 rounded-xl bg-[#e3f0ea] dark:bg-[#123830] text-xs font-bold text-[#2f7661] dark:text-[#70b99e] border border-[#347161]/20">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <CivicIcon name="shield" size={14} />
+                    <span className="truncate">{user.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : user.email}</span>
+                  </div>
+                  {user.aadhaar_last4 && (
+                    <p className="mt-0.5 text-[10px] font-mono text-[#527971] dark:text-[#8eaea7]">
+                      Aadhaar: •••• {user.aadhaar_last4}
+                    </p>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={handleSignOut}
-                  className="text-[#b04b37] hover:underline"
+                  className="text-[#b04b37] hover:underline shrink-0 text-xs font-bold pl-2"
                 >
                   Sign Out
                 </button>

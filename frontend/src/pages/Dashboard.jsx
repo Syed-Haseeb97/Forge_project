@@ -809,47 +809,6 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* Connected Services Banner */}
-      <section className="rounded-2xl bg-[#ece9df] dark:bg-[#082024] px-6 py-6 border border-[#173e42]/10 dark:border-white/10">
-        <div className="max-w-[1240px] mx-auto flex flex-col items-center gap-4 text-center lg:flex-row lg:justify-between lg:text-left">
-          <p className="text-xs font-bold tracking-[0.14em] text-[#687975] dark:text-[#95a9a6] uppercase">
-            Connected Municipal Departments
-          </p>
-          <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs sm:text-sm font-bold text-[#34514f] dark:text-[#e8b855]">
-            <span>Public Works Department</span>
-            <span className="text-[#b7b3a6]">•</span>
-            <span>Water & Sewage Board</span>
-            <span className="text-[#b7b3a6]">•</span>
-            <span>Municipal Sanitation</span>
-            <span className="text-[#b7b3a6]">•</span>
-            <span>Traffic & Highway Authority</span>
-            <span className="text-[#b7b3a6]">•</span>
-            <span>Public Safety & Hazards</span>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer id="help" className="rounded-[26px] bg-[#08272b] px-6 py-10 text-white/60">
-        <div className="max-w-[1240px] mx-auto flex flex-col items-center justify-between gap-6 text-center text-xs sm:flex-row sm:text-left">
-          <div className="flex flex-col sm:flex-row items-center gap-3 text-white">
-            <img
-              src="/logo-dark.jpg"
-              alt="जनAawaz"
-              className="h-8 w-auto object-contain rounded"
-            />
-            <div className="h-5 w-px bg-white/15 hidden sm:block" />
-            <img src="/emblem-india.svg" alt="Emblem of India" className="h-7 w-auto object-contain" />
-            <img src="/digital-india.svg" alt="Digital India" className="h-5 w-auto object-contain" />
-          </div>
-          <p>Emergency? Please contact emergency public safety dispatch immediately.</p>
-          <div className="flex gap-5 text-white/80">
-            <Link to="/reports" className="hover:text-[#e8b855]">Registry</Link>
-            <Link to="/submit" className="hover:text-[#e8b855]">File Complaint</Link>
-            <a href="#about" className="hover:text-[#e8b855]">Public Charter</a>
-          </div>
-        </div>
-      </footer>
     </div>
   )
 }

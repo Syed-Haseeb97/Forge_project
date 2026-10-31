@@ -23,6 +23,7 @@ from agent.schemas import (
     TriageDecision,
     CriticEvaluation,
     PrefillSuggestion,
+    SemanticDuplicateList,
 )
 from agent.tools import (
     reverse_geocode,
@@ -723,3 +724,102 @@ async def prefill_from_media(
         "description": text_hint or "Civic infrastructure issue observed at site requiring departmental attention.",
         "detected_language": "English",
     }
+
+
+async def check_semantic_duplicates(
+    new_title: Optional[str],
+    new_description: Optional[str],
+    new_category: Optional[str],
+    candidates: List[Dict[str, Any]],
+) -> Dict[str, Dict[str, Any]]:
+    """Compare top candidate reports against the incoming grievance using Gemini structured comparison."""
+    if not candidates:
+        return {}
+
+    # If neither title nor description provided, apply deterministic proximity heuristics
+    if not (new_title and new_title.strip()) and not (new_description and new_description.strip()):
+        results = {}
+        for c in candidates:
+            same_cat = bool(new_category and c.get("category") == new_category)
+            close = c.get("distance_km", 1.0) <= 0.15
+            if same_cat and close:
+                results[c["id"]] = {
+                    "likely_duplicate": True,
+                    "duplicate_reason": f"Same {new_category.replace('_', ' ')} defect reported within {int(c.get('distance_km', 0)*1000)}m",
+                }
+            else:
+                results[c["id"]] = {"likely_duplicate": False, "duplicate_reason": None}
+        return results
+
+    client = _get_client()
+    models = _get_models()
+
+    top3 = candidates[:3]
+    cands_summary = []
+    for c in top3:
+        dist_m = int(c.get("distance_km", 0) * 1000)
+        cands_summary.append(
+            f"Candidate Ticket ID: {c['id']}\n"
+            f"Title: {c.get('title')}\n"
+            f"Description: {c.get('description')}\n"
+            f"Category: {c.get('category')}\n"
+            f"Distance: {dist_m}m away"
+        )
+    candidates_text = "\n\n".join(cands_summary)
+
+    prompt = (
+        "You are an AI Civic Duplicate Detection Specialist.\n"
+        "A citizen is drafting a civic complaint:\n"
+        f"- Title: {new_title or 'N/A'}\n"
+        f"- Category: {new_category or 'N/A'}\n"
+        f"- Description: {new_description or 'N/A'}\n\n"
+        "Compare this grievance against these nearby existing tickets:\n\n"
+        f"{candidates_text}\n\n"
+        "For each ticket, return candidate report_id, likely_duplicate (bool: true if both tickets describe the identical defect or incident), "
+        "and duplicate_reason (concise 1-sentence comparison)."
+    )
+
+    if client:
+        for model_name in models:
+            try:
+                resp = await asyncio.wait_for(
+                    client.aio.models.generate_content(
+                        model=model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=SemanticDuplicateList,
+                        ),
+                    ),
+                    timeout=10.0,
+                )
+                if resp.text:
+                    parsed = SemanticDuplicateList.model_validate_json(resp.text)
+                    return {
+                        item.report_id: {
+                            "likely_duplicate": item.likely_duplicate,
+                            "duplicate_reason": item.duplicate_reason,
+                        }
+                        for item in parsed.candidates
+                    }
+            except Exception as e:
+                logger.warning(f"check_semantic_duplicates failed on {model_name}: {e}")
+
+    # Fallback keyword and proximity overlap
+    results = {}
+    n_title = (new_title or "").lower()
+    n_desc = (new_description or "").lower()
+    for c in top3:
+        c_title = (c.get("title") or "").lower()
+        same_cat = bool(new_category and c.get("category") == new_category)
+        words_c = set(c_title.split())
+        words_n = set(n_title.split() + n_desc.split())
+        overlap = words_c.intersection(words_n) - {"in", "the", "on", "a", "at", "to", "of", "and", "near", "road"}
+        if same_cat and (len(overlap) >= 1 or c.get("distance_km", 1.0) <= 0.15):
+            results[c["id"]] = {
+                "likely_duplicate": True,
+                "duplicate_reason": f"Similar issue reported nearby ({', '.join(list(overlap)[:2]) if overlap else 'same category within 150m'})",
+            }
+        else:
+            results[c["id"]] = {"likely_duplicate": False, "duplicate_reason": None}
+    return results

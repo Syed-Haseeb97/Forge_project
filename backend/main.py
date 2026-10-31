@@ -229,6 +229,8 @@ class TimelineOut(BaseModel):
 
 class NearbyReportOut(ReportOut):
     distance_km: float
+    likely_duplicate: bool = False
+    duplicate_reason: Optional[str] = None
 
 
 class StatsOut(BaseModel):
@@ -880,8 +882,10 @@ async def get_nearby_reports(
     longitude: float = Query(...),
     radius_km: float = Query(0.5, description="Search radius in kilometers"),
     category: Optional[str] = Query(None),
+    title: Optional[str] = Query(None),
+    description: Optional[str] = Query(None),
 ):
-    """Detect nearby existing reports for duplicate mitigation (FixMyStreet / Mark-a-Spot pattern)"""
+    """Detect nearby existing reports for duplicate mitigation and semantic duplicate matching (FixMyStreet / Mark-a-Spot pattern)"""
     from sqlalchemy import select, and_
 
     filters = [
@@ -905,6 +909,24 @@ async def get_nearby_reports(
                 nearby.append(NearbyReportOut(**data))
 
         nearby.sort(key=lambda x: x.distance_km)
+
+        if nearby:
+            from agent.pipeline import check_semantic_duplicates
+            cand_dicts = [n.model_dump() for n in nearby[:3]]
+            try:
+                dup_map = await check_semantic_duplicates(
+                    new_title=title,
+                    new_description=description,
+                    new_category=category,
+                    candidates=cand_dicts,
+                )
+                for n in nearby[:3]:
+                    if n.id in dup_map:
+                        n.likely_duplicate = dup_map[n.id].get("likely_duplicate", False)
+                        n.duplicate_reason = dup_map[n.id].get("duplicate_reason")
+            except Exception as e:
+                logger.warning(f"Error checking semantic duplicates in get_nearby_reports: {e}")
+
         return nearby
 
 

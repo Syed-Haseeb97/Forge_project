@@ -144,13 +144,20 @@ export default function SubmitReport() {
     )
   }
 
-  // Duplicate detection query
+  // Duplicate detection query with semantic title and description comparison
   const checkProximityDuplicates = async (lat, lng) => {
     if (!lat || !lng) return
     setCheckingNearby(true)
     try {
       const { data } = await axios.get('/api/reports/nearby', {
-        params: { latitude: lat, longitude: lng, radius_km: 0.5 }
+        params: {
+          latitude: lat,
+          longitude: lng,
+          radius_km: 0.5,
+          title: form.title?.trim() || undefined,
+          description: form.description?.trim() || undefined,
+          category: form.category || undefined,
+        }
       })
       setNearbyReports(data)
     } catch {
@@ -169,7 +176,7 @@ export default function SubmitReport() {
       }, 600)
       return () => clearTimeout(timer)
     }
-  }, [form.latitude, form.longitude])
+  }, [form.latitude, form.longitude, form.title])
 
   const handleMapPositionSelect = ({ latitude, longitude }) => {
     setMapCenter([latitude, longitude])
@@ -683,22 +690,45 @@ export default function SubmitReport() {
                         An active ticket may already cover this problem. You can endorse an existing report instead of creating a duplicate:
                       </p>
                       <div className="mt-2 space-y-2">
-                        {nearbyReports.slice(0, 2).map((nr) => (
+                        {nearbyReports.slice(0, 3).map((nr) => (
                           <div
                             key={nr.id}
-                            className="flex items-center justify-between gap-3 rounded-lg border border-[#bd7f23]/20 bg-white dark:bg-[#0b2529] p-2.5 text-xs"
+                            className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border p-2.5 text-xs ${
+                              nr.likely_duplicate
+                                ? 'border-[#ba7c29]/60 bg-[#fffdf5] dark:bg-[#251e12]'
+                                : 'border-[#bd7f23]/20 bg-white dark:bg-[#0b2529]'
+                            }`}
                           >
                             <div className="min-w-0 flex-1">
-                              <p className="font-bold text-[#0d3035] dark:text-[#f6f4ee] truncate">{nr.title}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="font-bold text-[#0d3035] dark:text-[#f6f4ee] truncate">{nr.title}</p>
+                                {nr.likely_duplicate && (
+                                  <span className="rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 px-2 py-0.5 text-[9px] font-bold shrink-0">
+                                    Likely Duplicate
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-[10px] text-[#718481]">{Math.round((nr.distance_km || 0) * 1000)}m away · Status: {nr.status}</p>
+                              {nr.duplicate_reason && (
+                                <p className="mt-1 text-[11px] text-[#ba7c29] dark:text-[#e8b855] italic font-serif">
+                                  Match: {nr.duplicate_reason}
+                                </p>
+                              )}
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => handleUpvoteNearby(nr.id)}
-                              className="rounded-full bg-[#e8b855] px-3 py-1 text-[10px] font-bold text-[#0d3035] hover:bg-[#efc56b] transition shrink-0"
-                            >
-                              ENDORSE THIS
-                            </button>
+                            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                              {nr.duplicate_reason && (
+                                <span className="text-[10px] text-[#85531b] dark:text-[#e8b855] italic font-medium hidden md:inline max-w-[200px] truncate" title={nr.duplicate_reason}>
+                                  {nr.duplicate_reason}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleUpvoteNearby(nr.id)}
+                                className="rounded-full bg-[#e8b855] px-3.5 py-1 text-[10px] font-bold text-[#0d3035] hover:bg-[#efc56b] transition shrink-0 shadow-xs"
+                              >
+                                ENDORSE THIS
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>

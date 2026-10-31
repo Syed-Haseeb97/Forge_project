@@ -88,6 +88,16 @@ class CriticEvaluation(BaseModel):
     )
 
 
+class SemanticDuplicateItem(BaseModel):
+    report_id: str = Field(..., description="The ID of the candidate nearby report")
+    likely_duplicate: bool = Field(..., description="Whether this ticket appears to describe the same physical issue or defect")
+    duplicate_reason: str = Field(..., description="One-line explanation comparing the two reports")
+
+
+class SemanticDuplicateList(BaseModel):
+    candidates: List[SemanticDuplicateItem] = Field(default_factory=list)
+
+
 class PrefillSuggestion(BaseModel):
     title: str = Field(
         ...,

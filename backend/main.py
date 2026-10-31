@@ -594,6 +594,10 @@ async def run_background_triage(
                                 rep.routed_to = dec_data["department"]
                             if dec_data.get("sla_hours"):
                                 rep.sla_hours = dec_data["sla_hours"]
+                        if step_data.get("step") == "critic_audit":
+                            crit_data = step_data.get("data", {})
+                            if not crit_data.get("agrees", True):
+                                rep.needs_human_review = True
                         await s.commit()
             except Exception as e:
                 logger.warning(f"Error persisting live trace step for {report_id}: {e}")

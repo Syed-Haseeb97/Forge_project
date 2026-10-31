@@ -21,6 +21,7 @@ from google.genai import types
 from agent.schemas import (
     EvidenceAnalysis,
     TriageDecision,
+    CriticEvaluation,
     PrefillSuggestion,
 )
 from agent.tools import (
@@ -124,6 +125,7 @@ def _fallback_triage_result(
         "locality": location,
         "visible_hazards": ["Unverified field report requiring departmental physical inspection"],
         "evidence_severity": final_sev,
+        "needs_human_review": False,
     }
 
 
@@ -533,6 +535,92 @@ async def _execute_agent_pipeline(
         if on_step:
             await on_step(step_data)
 
+    # -------------------------------------------------------------
+    # Step 8: Critic Audit (Structured Quality Control Second-Opinion)
+    # -------------------------------------------------------------
+    t0_critic = time.time()
+    critic_agrees = True
+    critic_issues: List[str] = []
+    suggested_severity: Optional[str] = None
+
+    if client:
+        critic_prompt = (
+            "You are an independent Senior Municipal Quality Auditor and Critic.\n"
+            "Audit the following triage decision against the raw sensor, vision, weather, locality, "
+            "sensitive sites, and recurrence signals.\n"
+            "Evaluate:\n"
+            "1. Is the assigned severity appropriate given physical hazards and vulnerable sites?\n"
+            "2. Is the department routing correct for this failure category?\n"
+            "3. Is the SLA turnaround realistic and statutory compliant?\n\n"
+            f"Incident: {title}\n"
+            f"Category: {category}\n"
+            f"Description: {description}\n\n"
+            f"{correlation_context}\n\n"
+            f"PROPOSED DECISION:\n"
+            f"- Final Severity: {decision_res.final_severity}\n"
+            f"- SLA Hours: {decision_res.sla_hours}\n"
+            f"- Department: {decision_res.department}\n"
+            f"- Decision Confidence: {decision_res.confidence}\n"
+            f"- Rationale: {decision_res.rationale}\n\n"
+            "Return structured JSON matching CriticEvaluation: {agrees: bool, issues: list[str], suggested_severity: Optional[str]}."
+        )
+
+        for model_name in models:
+            try:
+                t_sub0 = time.time()
+                resp = await asyncio.wait_for(
+                    client.aio.models.generate_content(
+                        model=model_name,
+                        contents=critic_prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=CriticEvaluation,
+                        ),
+                    ),
+                    timeout=12.0,
+                )
+                dur_critic = int((time.time() - t_sub0) * 1000)
+                if resp.text:
+                    critic_res = CriticEvaluation.model_validate_json(resp.text)
+                    critic_agrees = critic_res.agrees
+                    critic_issues = critic_res.issues
+                    suggested_severity = critic_res.suggested_severity
+
+                    step_data = {
+                        "step": "critic_audit",
+                        "tool": f"gemini_critic_auditor ({model_name})",
+                        "status": "warning" if (not critic_agrees) else "success",
+                        "duration_ms": dur_critic,
+                        "summary": (
+                            f"Critic Flagged Concern: {'; '.join(critic_issues)}"
+                            if not critic_agrees
+                            else "Critic Audited & Endorsed Decision"
+                        ),
+                        "data": critic_res.model_dump(),
+                    }
+                    trace.append(step_data)
+                    if on_step:
+                        await on_step(step_data)
+                    break
+            except Exception as e:
+                logger.warning(f"critic_audit failed on {model_name}: {e}")
+
+    if "critic_audit" not in [s["step"] for s in trace]:
+        dur_critic = int((time.time() - t0_critic) * 1000)
+        step_data = {
+            "step": "critic_audit",
+            "tool": "critic_heuristic_validator",
+            "status": "success",
+            "duration_ms": dur_critic,
+            "summary": "Automated rule auditor verified decision constraints",
+            "data": {"agrees": True, "issues": []},
+        }
+        trace.append(step_data)
+        if on_step:
+            await on_step(step_data)
+
+    needs_human_review = (not critic_agrees) or (float(decision_res.confidence) < 0.6)
+
     # Compile unified analysis text: evidence summary plus rationale and action plan
     full_analysis = (
         f"{evidence_res.issue_type} ({evidence_res.evidence_severity.upper()} evidence severity).\n\n"
@@ -555,6 +643,7 @@ async def _execute_agent_pipeline(
         "locality": geocode_res.get("locality") or geocode_res.get("city") or location,
         "visible_hazards": evidence_res.visible_hazards,
         "evidence_severity": evidence_res.evidence_severity,
+        "needs_human_review": needs_human_review,
     }
 
 

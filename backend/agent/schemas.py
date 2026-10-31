@@ -69,6 +69,21 @@ class TriageDecision(BaseModel):
     )
 
 
+class CriticEvaluation(BaseModel):
+    agrees: bool = Field(
+        ...,
+        description="Whether the auditor agrees with the proposed severity, routing, and SLA decision"
+    )
+    issues: List[str] = Field(
+        default_factory=list,
+        description="List of specific concerns, oversights, or discrepancies identified in the decision"
+    )
+    suggested_severity: Optional[Literal["low", "medium", "high", "critical"]] = Field(
+        default=None,
+        description="Alternative suggested severity level if the critic disagrees"
+    )
+
+
 class PrefillSuggestion(BaseModel):
     title: str = Field(
         ...,

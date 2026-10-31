@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom'
 import axios from 'axios'
 import toast from 'react-hot-toast'
 import CivicIcon from '../components/CivicIcon'
-import { CATEGORIES } from '../components/constants'
+import { CATEGORIES, reverseGeocodeAddress } from '../components/constants'
 import CivicMap from '../components/CivicMap'
 import { useAuth } from '../components/AuthContext'
 
@@ -127,14 +127,25 @@ export default function SubmitReport() {
     }
     setLocating(true)
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
         const lat = Number(pos.coords.latitude.toFixed(6))
         const lng = Number(pos.coords.longitude.toFixed(6))
         setMapCenter([lat, lng])
         setForm(f => ({ ...f, latitude: String(lat), longitude: String(lng) }))
-        setLocating(false)
-        toast.success('Current location acquired')
         checkProximityDuplicates(lat, lng)
+        try {
+          const address = await reverseGeocodeAddress(lat, lng)
+          if (address) {
+            setForm(f => ({ ...f, location: address }))
+            toast.success(`Location identified: ${address}`, { icon: '📍', id: 'my-loc' })
+          } else {
+            toast.success('Current location acquired')
+          }
+        } catch {
+          toast.success('Current location acquired')
+        } finally {
+          setLocating(false)
+        }
       },
       (err) => {
         setLocating(false)
@@ -178,13 +189,22 @@ export default function SubmitReport() {
     }
   }, [form.latitude, form.longitude, form.title])
 
-  const handleMapPositionSelect = ({ latitude, longitude }) => {
+  const handleMapPositionSelect = async ({ latitude, longitude }) => {
     setMapCenter([latitude, longitude])
     setForm(f => ({
       ...f,
       latitude: String(latitude),
       longitude: String(longitude),
     }))
+    try {
+      const address = await reverseGeocodeAddress(latitude, longitude)
+      if (address) {
+        setForm(f => ({ ...f, location: address }))
+        toast.success(`Pinned: ${address}`, { icon: '📍', id: 'pin-geocode' })
+      }
+    } catch (e) {
+      console.warn('Reverse geocode error', e)
+    }
   }
 
   const handleFileChange = (e, type) => {
@@ -645,15 +665,18 @@ export default function SubmitReport() {
                     </button>
                   </div>
 
-                  <div className="relative">
-                    <CivicIcon name="location" size={17} className="absolute left-4 top-3.5 text-[#617572]" />
+                  <div className="relative flex items-center">
+                    <div className="pointer-events-none absolute left-3.5 inset-y-0 flex items-center text-[#617572]">
+                      <CivicIcon name="location" size={17} />
+                    </div>
                     <input
                       required
                       type="text"
+                      style={{ paddingLeft: '2.75rem' }}
                       value={form.location}
                       onChange={set('location')}
                       placeholder="Street name, landmark, cross junction..."
-                      className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] py-3 pl-11 pr-4 text-sm text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#9aa6a4] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition font-medium"
+                      className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] py-3 pr-4 text-sm text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#9aa6a4] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition font-medium"
                     />
                   </div>
 

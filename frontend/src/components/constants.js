@@ -1,3 +1,5 @@
+import axios from 'axios'
+
 export const SEVERITY_COLORS = {
   critical: 'severity-critical',
   high: 'severity-high',
@@ -57,4 +59,43 @@ export const toggleWatchlist = (id) => {
 
 export const isWatched = (id) => {
   return getWatchlist().includes(id)
+}
+
+/**
+ * Reverse geocode latitude and longitude to a human-readable street/locality name.
+ * Uses backend API with in-memory caching and 1 req/sec rate limit, with graceful browser fallback.
+ */
+export const reverseGeocodeAddress = async (lat, lng) => {
+  if (!lat || !lng) return ''
+  try {
+    const { data } = await axios.get('/api/reports/reverse-geocode', {
+      params: { latitude: lat, longitude: lng },
+      timeout: 6000,
+    })
+    if (data?.address) return data.address
+  } catch (err) {
+    console.warn('Backend reverse-geocode lookup failed, attempting browser fallback', err)
+  }
+
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+      { headers: { Accept: 'application/json' } }
+    )
+    if (res.ok) {
+      const json = await res.json()
+      const addr = json.address || {}
+      const parts = [
+        addr.road || addr.pedestrian || addr.highway,
+        addr.suburb || addr.neighbourhood || addr.residential || addr.subdistrict,
+        addr.city || addr.town || addr.county,
+      ].filter(Boolean)
+      if (parts.length > 0) return parts.join(', ')
+      if (json.display_name) return json.display_name
+    }
+  } catch (err) {
+    console.warn('Direct Nominatim geocode fallback failed', err)
+  }
+
+  return `Near coordinates (${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)})`
 }

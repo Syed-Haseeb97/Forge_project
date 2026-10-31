@@ -65,3 +65,22 @@ def test_submit_report_returns_triaging_status(client, citizen_headers):
         assert trace_data["report_id"] == data["id"]
         assert trace_data["triage_status"] == "triaging"
         assert trace_data["is_complete"] is False
+
+
+def test_reverse_geocode_endpoint(client):
+    """GET /api/reports/reverse-geocode returns formatted address for client auto-fill."""
+    mock_geo = {
+        "road": "Barakhamba Road",
+        "locality": "Connaught Place",
+        "city": "New Delhi",
+        "display_name": "Barakhamba Road, Connaught Place, New Delhi, India",
+        "degraded": False,
+    }
+    with patch("agent.tools.reverse_geocode", return_value=mock_geo):
+        resp = client.get("/api/reports/reverse-geocode?latitude=28.6297&longitude=77.2255")
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert "Barakhamba Road" in data["address"]
+        assert "Connaught Place" in data["address"]
+        assert data["city"] == "New Delhi"
+

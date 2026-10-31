@@ -919,6 +919,36 @@ async def list_reports(
         return reports
 
 
+@app.get("/api/reports/reverse-geocode")
+async def reverse_geocode_lookup(
+    latitude: float = Query(..., description="Latitude coordinate"),
+    longitude: float = Query(..., description="Longitude coordinate"),
+):
+    """Resolve coordinates to clean street / locality address for citizen form auto-fill."""
+    from agent.tools import reverse_geocode
+    try:
+        geo = await reverse_geocode(latitude, longitude)
+        parts = [p for p in [geo.get("road"), geo.get("locality"), geo.get("city")] if p]
+        address = ", ".join(parts) if parts else (geo.get("display_name") or f"Near coordinates ({latitude:.5f}, {longitude:.5f})")
+        return {
+            "address": address,
+            "road": geo.get("road"),
+            "locality": geo.get("locality"),
+            "city": geo.get("city"),
+            "display_name": geo.get("display_name"),
+            "degraded": geo.get("degraded", False),
+        }
+    except Exception as e:
+        return {
+            "address": f"Near coordinates ({latitude:.5f}, {longitude:.5f})",
+            "road": None,
+            "locality": None,
+            "city": None,
+            "display_name": None,
+            "degraded": True,
+        }
+
+
 @app.get("/api/reports/nearby", response_model=List[NearbyReportOut])
 async def get_nearby_reports(
     latitude: float = Query(...),

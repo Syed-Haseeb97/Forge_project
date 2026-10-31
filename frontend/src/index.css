@@ -146,7 +146,10 @@ body.dark,
   border: 1px solid var(--border-color) !important;
   color: var(--text-main) !important;
   border-radius: 0.75rem; /* 12px */
-  padding: 0.75rem 1rem;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
   font-size: 0.875rem;
   width: 100%;
   outline: none;

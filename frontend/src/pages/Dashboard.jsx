@@ -3,7 +3,7 @@ import axios from 'axios'
 import { Link, useNavigate } from 'react-router-dom'
 import { ListOrdered, Users, Sparkles, Clock, AlertTriangle, ArrowRight } from 'lucide-react'
 import CivicIcon from '../components/CivicIcon'
-import { CATEGORIES } from '../components/constants'
+import { CATEGORIES, reverseGeocodeAddress } from '../components/constants'
 import { useAuth } from '../components/AuthContext'
 import toast from 'react-hot-toast'
 
@@ -69,12 +69,22 @@ export default function Dashboard() {
     }
     setQuickLocating(true)
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
         const lat = Number(pos.coords.latitude.toFixed(6))
         const lng = Number(pos.coords.longitude.toFixed(6))
         setQuickForm(f => ({ ...f, latitude: String(lat), longitude: String(lng) }))
-        setQuickLocating(false)
         toast.success(`GPS coordinates captured (${lat}, ${lng})`)
+        try {
+          const address = await reverseGeocodeAddress(lat, lng)
+          if (address) {
+            setQuickForm(f => ({ ...f, location: address }))
+            toast.success(`Location identified: ${address}`, { icon: '📍', id: 'quick-gps' })
+          }
+        } catch (e) {
+          console.warn('Reverse geocode failed', e)
+        } finally {
+          setQuickLocating(false)
+        }
       },
       () => {
         setQuickLocating(false)
@@ -434,11 +444,14 @@ export default function Dashboard() {
                           <span>{quickLocating ? 'Acquiring GPS...' : (quickForm.latitude ? 'GPS Pinned ✓' : 'Pin My GPS')}</span>
                         </button>
                       </div>
-                      <div className="relative">
-                        <CivicIcon name="location" size={17} className="absolute left-3.5 top-3.5 text-[#617572]" />
+                      <div className="relative flex items-center">
+                        <div className="pointer-events-none absolute left-3.5 inset-y-0 flex items-center text-[#617572]">
+                          <CivicIcon name="location" size={17} />
+                        </div>
                         <input
                           required
-                          className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] py-3 pl-10 pr-4 text-sm text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#95a5a3] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition"
+                          style={{ paddingLeft: '2.75rem' }}
+                          className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] py-3 pr-4 text-sm text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#95a5a3] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition font-medium"
                           placeholder="Street, landmark, or intersection"
                           value={quickForm.location}
                           onChange={e => setQuickForm(f => ({ ...f, location: e.target.value }))}

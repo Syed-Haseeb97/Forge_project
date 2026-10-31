@@ -1,190 +1,262 @@
-# 🏛️ Jan Aawaz (जनAawaz) – Civic Grievance & Infrastructure Redressal System
+# 🏛️ Jan Aawaz (जनAawaz)
+### *Autonomous Civic Grievance Triage & Transparent Municipal Infrastructure Pipeline*
 
-> **Note**: Hackathon prototype, not an official government service.
+> [!IMPORTANT]
+> **Hackathon Prototype Notice**: Jan Aawaz (जनAawaz) is an experimental digital governance and civic pulse prototype submitted for hackathon evaluation. It is **not** an official government portal or statutory public service of the Government of India or any municipal corporation.
 
-AI-powered civic issue reporting, automated multimodal severity triage, geospatial infrastructure mapping, and transparent public municipal accountability.
+[![CI](https://github.com/Syed-Haseeb97/Forge_project/actions/workflows/ci.yml/badge.svg)](https://github.com/Syed-Haseeb97/Forge_project/actions/workflows/ci.yml)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?style=flat&logo=fastapi)](https://fastapi.tiangolo.com)
+[![React 18](https://img.shields.io/badge/React-18.3-61dafb.svg?style=flat&logo=react)](https://react.dev)
+[![Gemini API](https://img.shields.io/badge/Google_Gemini-2.5_Flash-4285f4.svg?style=flat&logo=google)](https://ai.google.dev)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ecf8e.svg?style=flat&logo=supabase)](https://supabase.com)
+[![Open311](https://img.shields.io/badge/Open311-GeoReport_v2-e8b855.svg?style=flat)](https://www.open311.org)
 
-Inspired by premier open-source civic platforms (**FixMyStreet**, **Mark-a-Spot**, and the **Open311 GeoReport v2** international specification).
+🔗 **Live Production Demo**: [https://janaawaz.vercel.app](https://janaawaz.vercel.app) *(Demo Deployment Placeholder)*  
+🎬 **3-Minute Walkthrough Video**: [https://youtu.be/placeholder](https://youtu.be/placeholder) *(Judging Video Placeholder)*
 
 ---
 
-## ⚡ Tech Stack
-- **Backend**: FastAPI + async SQLAlchemy (SQLite locally, Supabase PostgreSQL via `DATABASE_URL`) + PyJWT + `google-genai`
-- **Frontend**: React 18 + Vite + Tailwind CSS + Leaflet GIS (`react-leaflet`) + Axios + React Hot Toast
-- **AI Multimodal Engine**: Google Gemini API (`gemini-2.5-flash`, `gemini-1.5-flash`) with structured schema output and resilient heuristic fallbacks
-- **Standard Protocol**: Native Open311 GeoReport v2 compliance
+## 📌 The Problem
+
+Civic grievances in municipal jurisdictions across India face systemic challenges:
+1. **The Bureaucratic Black Hole**: Citizens submit complaints with little visibility into which engineering department received them, who is assigned, or when repairs will occur.
+2. **Missing Multi-Signal Urgency Triage**: A pothole next to an active primary school during monsoon season is exponentially more hazardous than a cosmetic crack on a suburban curb, yet existing systems treat them as equal tickets.
+3. **Absence of Statutory Accountability**: Citizens have no enforceable Service Level Agreements (SLAs), and dockets linger indefinitely without automated escalation.
+4. **Fraudulent Closures**: Dishonest contractors frequently mark dockets "resolved" using false claims or unrelated photos taken miles away.
+5. **Language & Linguistic Barriers**: Technical municipal portals are overwhelmingly English-first, excluding non-English speaking citizens from understanding administrative actions.
+
+---
+
+## 💡 The Solution
+
+**Jan Aawaz (जनAawaz)** transforms civic grievance management into an **autonomous, agentic, multi-signal intelligence pipeline**:
+- **Multi-Signal Context Correlation**: Correlates visual evidence with live microclimate weather forecasts, OpenStreetMap sensitive site queries (schools, clinics within 250m), and live database recurrence to assign dynamic SLAs (24h to 336h).
+- **Autonomous Dispatch Agent**: Automatically drafts formal municipal work orders in English and regional languages with direct Google Maps coordinate links.
+- **Statutory SLA Watchdog**: Runs an autonomous background loop escalating overdue tickets from Department Heads to Municipal Commissioners, and ultimately flagging tickets publicly as overdue.
+- **Multimodal AI Resolution Auditing**: Uses computer vision to audit "after-photos" against baseline defect photos, strictly rejecting closures if the issue remains unresolved.
+- **Multilingual Plain-Language Explainer (जन संवाद)**: Empowers residents across 8 Indian languages with plain-language summaries and browser-based audio narration via the Web Speech API.
+- **Strict Zero-Dummy-Data Architecture**: All analytics, map hotspots, and metrics are computed dynamically from real database submissions, official live APIs, and open datasets.
 
 ---
 
 ## 🌟 Key Features
 
-### 1. 🤖 Multimodal AI Severity Triage & Routing
-- Upload photographic or audio evidence of civic infrastructure failures.
-- Gemini assesses structural damage, classifies severity (`critical`, `high`, `medium`, `low`), formulates engineering action plans, and establishes target SLA resolution hours (24h, 72h, 168h, 336h).
-- Automatic routing to the responsible municipal department (Road & Highway, Water & Sewage, Sanitation, Power, Public Safety, etc.).
-
-### 2. 🗺️ Interactive Civic GIS Map & Pin Placement
-- **Reports GIS**: Seamless switch between Grid View and interactive Map View with color-coded severity pins.
-- **Location Picker**: Tap or drag the pin anywhere on the map when reporting an issue to set exact GPS coordinates.
-
-### 3. 🛡️ Proximity-Based Duplicate Detection
-- Avoid duplicate city tickets: when a citizen selects a location, Jan Aawaz scans for open reports within 500 meters and invites the citizen to upvote the existing ticket instead.
-
-### 4. 📜 Civic Lifecycle Audit Trail & Transparency
-- Complete chronological activity timeline tracking each ticket from submission through AI triage, department routing, official comments, and resolution.
-
-### 5. ✅ Verified Resolution Proof (Before & After Verification)
-- Authorities close tickets by submitting verified completion notes and photographic proof ("After Photo").
-- Detail view renders side-by-side Before & After photographic evidence to the public.
-
-### 6. 🔐 Authenticated Access & Role-Based Authorization
-- OTP-based citizen authentication powered by signed PyJWT tokens (12h expiration).
-- Role segregation: Citizen (reporting, endorsements, inquiries) vs. Municipal Authority (official status updates, resolution verification, authoritative notices).
-
-### 7. 🌐 Open311 GeoReport v2 Interoperability
-- Bidirectional standard endpoints (`/api/open311/v2/services.json` and `/api/open311/v2/requests.json`) compatible with municipal 311 systems and civic data aggregators.
-
-### 8. 📊 Open Data Export
-- One-click public data export to CSV or JSON for citizen researchers, journalists, and city audits.
+| Capability | Technical Implementation | Public Benefit |
+|---|---|---|
+| **Multimodal Ingestion** | Gemini 2.5 Flash Async Client + `python-multipart` | Accepts photos, voice testimonials, and GPS pins without form fatigue. |
+| **6-Step Agentic Triage** | Nominatim + Open-Meteo + Overpass API (250m) + Gemini | Context-aware severity scoring that cites weather risks and nearby schools. |
+| **Auto-Fill from Photo/Voice** | `POST /api/ai/prefill` structured vision extraction | Pre-populates title, category, description, and detected language. |
+| **Autonomous Dispatch** | Background asynchronous worker + SMTP SSL | Issues formal municipal work orders with coordinate links upon submission. |
+| **SLA Watchdog Worker** | Asyncio background worker with `SLA_TIME_SCALE` | Tiered escalation (Dept Head ➔ Commissioner ➔ Overdue flag). |
+| **Resolution Verification** | Multimodal Gemini Vision comparison (Before vs. After) | Prevents fraudulent ticket closure; rejects unverified work orders. |
+| **Resident Dispute Loop** | `POST /api/reports/{id}/feedback` | Residents can confirm completion or dispute to instantly reopen dockets. |
+| **8-Language Explainer** | Gemini + `window.speechSynthesis` (Web Speech API) | Accessible audio briefings in Hindi, Tamil, Telugu, Bengali, Marathi, etc. |
+| **300m Hotspot Clusters** | Dynamic spatial grid clustering ($\approx 0.0027^\circ$) | Visualizes localized infrastructure failure corridors on Leaflet GIS maps. |
+| **Live AI Civic Brief** | Gemini structured summary cached for 10 minutes | Executive summary and 3 prioritized actions synthesized from live DB records. |
+| **Open311 v2 Compliance** | `/api/open311/v2/services.json` & `/requests.json` | Interoperable with international civic platforms (FixMyStreet, Mark-a-Spot). |
 
 ---
 
-## 🚀 Running on Localhost
+## 🏗️ Agentic Pipeline Architecture
 
-### 1. Backend (FastAPI on http://localhost:8000)
+```mermaid
+flowchart TD
+    subgraph Ingestion["1. Citizen Ingestion"]
+        A[Photo / Audio Evidence + GPS Pin] --> B[FastAPI Gateway]
+        B --> C[PyJWT Authenticated Session]
+    end
+
+    subgraph AgentPipeline["2. Multi-Signal Correlated Agent Pipeline"]
+        C --> D1[1. Understand Evidence: Gemini Multimodal Vision/Audio]
+        D1 --> D2[2. Reverse Geocoding: Nominatim OSM]
+        D2 --> D3[3. Weather Forecast: Open-Meteo 24h Rain Risk]
+        D3 --> D4[4. Sensitive Sites: Overpass API 250m Schools/Hospitals]
+        D4 --> D5[5. Proximity Recurrence: Live Supabase DB 300m]
+        D5 --> D6[6. Correlated Decision: Gemini Decision & Explicit Rationale]
+        D6 -.->|API Quota / Failure| D7[7. Heuristic Fallback Agent: 'status: fallback']
+    end
+
+    subgraph AutonomousWorkers["3. Autonomous Background Execution"]
+        D6 --> E1[Draft & Send Municipal Dispatch Letter via SMTP]
+        E1 --> E2[Background Watchdog: Evaluates SLA Escalations Level 1-3]
+        E2 --> E3[Demo Acceleration: SLA_TIME_SCALE Compression]
+    end
+
+    subgraph ResolutionVerification["4. AI Resolution Audit & Public Review"]
+        F1[Authority Submits After-Photo] --> F2[Gemini Vision Comparative Audit]
+        F2 -->|Fixed / Partially Fixed| F3[Ticket Resolved]
+        F2 -->|Not Fixed / Wrong Location| F4[Reject Closure & Keep In Progress]
+        F3 --> F5[Resident On-Site Dispute or Confirmation]
+    end
+```
+
+---
+
+## 🌐 Live External Data Sources
+
+Jan Aawaz adheres to a **strict zero-dummy-data policy**. Every statistic, map overlay, and weather correlation originates from live data streams:
+
+| External Provider | Endpoint / Service | Purpose | Timeout & Resilience |
+|---|---|---|---|
+| **OpenStreetMap Nominatim** | `https://nominatim.openstreetmap.org/reverse` | Reverse geocoding latitude/longitude to street, locality, and city. | $\le 5.8$s timeout, cached by coordinate rounding, rate-limited to 1 req/sec. |
+| **Open-Meteo Weather** | `https://api.open-meteo.com/v1/forecast` | Live microclimate precipitation and max 24h rainfall probability. | $\le 5.8$s timeout, public API (no key required), graceful zero-rain fallback. |
+| **OpenStreetMap Overpass** | `https://overpass-api.de/api/interpreter` | Overpass QL spatial bounding box query for schools, hospitals, transit hubs within 250m. | $\le 5.8$s timeout, regex-bounded coordinate query, defaults to 0 sites if timed out. |
+| **Supabase PostgreSQL** | `aws-0-eu-west-1.pooler.supabase.com:5432` | Live cloud database storing tickets, dispatches, explanations, and audit logs. | Async SQLAlchemy pooler with automated startup migrations (`ensure_schema()`). |
+| **Google Gemini API** | `client.aio.models.generate_content` | Multimodal visual inspection, correlated reasoning, and multilingual drafting. | $\le 5.8$s async timeout, multi-model fallback list, deterministic heuristic rules. |
+| **Web Speech API** | `window.speechSynthesis` | Client-side text-to-speech audio narration using regional Indian voice engines. | Pure browser native API; UI hides button gracefully if unsupported. |
+
+---
+
+## 📸 Interface & Audit Screenshots
+
+| Screenshot | Description | Path |
+|---|---|---|
+| **AI Civic Pulse Brief** | Executive municipal brief with 3 prioritized actions and 10-minute live cache badge. | [`docs/screenshots/dashboard_civic_brief.png`](file:///D:/projects/fordge5/fordge/docs/screenshots/README.md) |
+| **AI Reasoning Trace** | Full multi-signal audit trace citing Open-Meteo rain, Overpass sensitive sites, and SLA rationale. | [`docs/screenshots/agentic_reasoning_trace.png`](file:///D:/projects/fordge5/fordge/docs/screenshots/README.md) |
+| **Plain-Language Explainer** | 8-language citizen ombudsman summary in Hindi with audio listen control. | [`docs/screenshots/multilingual_explainer_hindi.png`](file:///D:/projects/fordge5/fordge/docs/screenshots/README.md) |
+| **Official Dispatch Work Order** | Formal bureaucratic work order letter with Google Maps coordinates and SLA deadline. | [`docs/screenshots/dispatch_letter_modal.png`](file:///D:/projects/fordge5/fordge/docs/screenshots/README.md) |
+| **Multimodal Resolution Audit** | Comparative AI verification audit rejecting incomplete repairs and logging timeline strikes. | [`docs/screenshots/resolution_audit_before_after.png`](file:///D:/projects/fordge5/fordge/docs/screenshots/README.md) |
+| **300m Spatial GIS Hotspots** | Full-screen GIS map view rendering translucent 300-meter circular grievance clusters. | [`docs/screenshots/gis_hotspot_clusters.png`](file:///D:/projects/fordge5/fordge/docs/screenshots/README.md) |
+
+---
+
+## ⚙️ Configuration & Environment Variables
+
+All system configurations are managed via environment variables documented in [`backend/.env.example`](file:///D:/projects/fordge5/fordge/backend/.env.example):
+
+| Variable | Default Value | Description |
+|---|---|---|
+| `GEMINI_API_KEY` | *None (Required)* | Google Gemini API Key for multimodal triage and structured reasoning. |
+| `GEMINI_MODELS` | `gemini-3.5-flash-lite,gemini-3.8-flash,gemini-3.5-flash` | Comma-separated list of Gemini models tried in order. |
+| `DATABASE_URL` | `sqlite+aiosqlite:///./fordge.db` | Async SQLAlchemy database URL (SQLite locally, asyncpg for Supabase PostgreSQL). |
+| `JWT_SECRET` | *Random Secure String* | Cryptographic secret used to sign 12-hour citizen and authority JWT tokens. |
+| `AUTHORITY_EMAILS` | `commissioner@delhi.gov.in,admin@janaawaz.in` | Comma-separated email addresses granted the `authority` role upon authentication. |
+| `DEV_MODE` | `false` | When `true`, returns `dev_code` in OTP auth responses for automated testing. |
+| `CORS_ORIGINS` | `http://localhost:5173,http://localhost:3000` | Comma-separated allowed CORS origins (no wildcards with credentials). |
+| `DISPATCH_EMAIL` | `dispatch@janaawaz.in` | Municipal inbox where automated dispatch letters and work orders are emailed. |
+| `WATCHDOG_INTERVAL_SEC` | `60` | Frequency in seconds at which the background SLA watchdog inspects tickets. |
+| `SLA_TIME_SCALE` | `1.0` | Demo time compression factor (e.g. `3600` makes 1 hour elapse in 1 real second). |
+| `GMAIL_USER` / `GMAIL_APP_PASSWORD` | *Optional* | SMTP credentials for real dispatch and OTP verification emails. |
+| `VITE_API_BASE` | `""` (Empty string for relative) | Frontend environment variable specifying backend FastAPI base URL. |
+
+---
+
+## 🚀 Local Development Setup
+
+### Prerequisites
+- Python 3.11+
+- Node.js 20+ and npm
+- Git
+
+### 1. Backend Setup
 ```bash
 cd backend
-# Create and activate virtual environment:
+
+# Create and activate virtual environment
 python -m venv venv
-venv\Scripts\activate  # On Windows
-pip install -r requirements.txt
+# On Windows:
+venv\Scripts\activate
+# On Linux/macOS:
+source venv/bin/activate
 
-# Copy environment variables and configure keys:
+# Install dependencies
+pip install -r requirements.txt pytest
+
+# Configure environment
 cp .env.example .env
+# Edit .env with your GEMINI_API_KEY and DATABASE_URL
 
-# Run server:
+# Run database migrations and start server
 uvicorn main:app --reload --port 8000
 ```
+Backend API interactive documentation will be available at:  
+👉 **http://localhost:8000/docs** (Swagger UI) & **http://localhost:8000/redoc**
 
-### 2. Frontend (Vite on http://localhost:5173)
+### 2. Frontend Setup
 ```bash
 cd frontend
+
+# Install dependencies
 npm install
+
+# Start Vite development server
 npm run dev
 ```
-
-- **Frontend App**: http://localhost:5173
-- **Interactive Swagger Docs**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/api/health
-- **Open311 Service Catalog**: http://localhost:8000/api/open311/v2/services.json
+Frontend application will be accessible at:  
+👉 **http://localhost:5173**
 
 ---
 
-## ☁️ Deployment Guide
+## 🧪 Automated Testing & CI/CD
 
-### 1. Backend Deployment (Render or Fly.io)
-The backend includes a production [Dockerfile](file:///D:/projects/fordge5/fordge/backend/Dockerfile) with a built-in health check on `/api/health`.
+Jan Aawaz includes an automated test suite verifying security auth guards, heuristic fallback degradation, and watchdog worker idempotency.
 
-- **On Render**:
-  1. Create a new **Web Service** connected to the repository.
-  2. Set Root Directory to `backend` (or build using the Docker runtime pointing to `backend/Dockerfile`).
-  3. Set Environment Variables:
-     - `DATABASE_URL`: Your Supabase PostgreSQL connection string (`postgresql+asyncpg://...`).
-     - `JWT_SECRET`: Secure random string for signing JWT tokens.
-     - `AUTHORITY_EMAILS`: Comma-separated list of authority emails (e.g. `admin@municipal.gov,inspector@civic.org`).
-     - `CORS_ORIGINS`: Your Vercel frontend URL (e.g. `https://jan-aawaz.vercel.app`).
-     - `GEMINI_API_KEY`: Google Gemini API key.
-     - `DEV_MODE`: `false` in production.
-     - `SUPABASE_URL` & `SUPABASE_KEY` / `SUPABASE_STORAGE_BUCKET`: For uploaded media storage.
-     - `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`: For live OTP delivery (if unset, auth operates gracefully).
+Run backend tests locally:
+```bash
+cd backend
+python -m pytest tests -v
+```
 
-- **On Fly.io**:
-  ```bash
-  cd backend
-  fly launch --dockerfile Dockerfile
-  fly secrets set JWT_SECRET="your-secret" DATABASE_URL="postgresql+asyncpg://..." GEMINI_API_KEY="..." CORS_ORIGINS="https://jan-aawaz.vercel.app"
-  fly deploy
-  ```
+Run frontend production build verification:
+```bash
+cd frontend
+npm run build
+```
 
-### 2. Database & Storage (Supabase)
-- **Database**:
-  - Provision a Supabase PostgreSQL project.
-  - Set `DATABASE_URL` using the `postgresql+asyncpg://` dialect.
-  - Jan Aawaz runs automatic startup migrations via `migrations.py` (`ensure_schema()`), inspecting and provisioning tables and missing columns dynamically.
-- **Storage**:
-  - Create a public Supabase Storage bucket named `civicline-media` (or configure `SUPABASE_STORAGE_BUCKET`).
-  - Provide `SUPABASE_URL` and `SUPABASE_KEY` in environment variables.
+Both tests run automatically on every pull request and push to `main` via the GitHub Actions workflow in [`.github/workflows/ci.yml`](file:///D:/projects/fordge5/fordge/.github/workflows/ci.yml).
+
+---
+
+## 🚢 Production Deployment Guide
+
+### 1. Database & Object Storage (Supabase)
+- Create a Supabase project.
+- In **Database Settings > Connection Pooling**, copy the Transaction/Session Pooler connection string.
+- Format for async SQLAlchemy: `postgresql+asyncpg://postgres.[REF]:[PASS]@[HOST]:5432/postgres`.
+- In **Storage**, create a public bucket named `reports` (or use local filesystem storage via `UPLOAD_DIR`).
+
+### 2. Backend Deployment (Render or Fly.io)
+Deploy using the included [`backend/Dockerfile`](file:///D:/projects/fordge5/fordge/backend/Dockerfile):
+```dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+EXPOSE 8000
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+- In your cloud host settings, configure the environment variables listed in the table above.
+- Set `DEV_MODE=false`.
 
 ### 3. Frontend Deployment (Vercel)
-The frontend includes [vercel.json](file:///D:/projects/fordge5/fordge/frontend/vercel.json) to handle Single Page Application (SPA) routing without swallowing API paths.
-
-- **On Vercel**:
-  1. Import the repository and set Root Directory to `frontend`.
-  2. Framework Preset: **Vite**.
-  3. Environment Variables:
-     - `VITE_API_BASE`: The deployed backend URL (e.g. `https://jan-aawaz-api.onrender.com` or empty string if behind a reverse proxy).
-  4. Deploy.
-
----
-
-## 📁 Project Structure
-```
-fordge/
-├── backend/
-│   ├── main.py           # FastAPI routes, Open311 & export endpoints
-│   ├── auth.py           # PyJWT verification, RBAC & dependencies
-│   ├── migrations.py     # ensure_schema() auto-migration for SQLite/Postgres
-│   ├── models.py         # SQLAlchemy ORM (Reports, Timeline, Comments, Citizens)
-│   ├── database.py       # Async SQLAlchemy session and connection pool
-│   ├── gemini_service.py # Gemini multimodal triage & heuristic fallback
-│   ├── email_service.py  # OTP mailing & 30s rate limiting
-│   ├── storage_service.py# Local & Supabase object storage
-│   ├── Dockerfile        # Production container definition
-│   ├── .env.example      # Sample configuration
-│   └── requirements.txt  # Python dependencies
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── AuthContext.jsx # JWT session, role management & 401 interceptor
-│   │   │   ├── CivicMap.jsx    # Interactive Leaflet GIS map
-│   │   │   ├── Navbar.jsx      # Header, authentication status & navigation
-│   │   │   ├── Footer.jsx      # Footer with prototype notice & links
-│   │   │   ├── ReportCard.jsx  # Card with SLA & watchlist
-│   │   │   └── constants.js    # Badges, categories & watchlist helpers
-│   │   ├── pages/
-│   │   │   ├── Dashboard.jsx   # Metrics, charts, incident filing & tracking
-│   │   │   ├── ReportsList.jsx # Grid/Map view, filters & CSV export
-│   │   │   ├── SubmitReport.jsx# Map picker & duplicate detection
-│   │   │   ├── ReportDetail.jsx# Before/After proof, audit trail, gated authority tools
-│   │   │   └── AuthPage.jsx    # Citizen OTP registration & login
-│   │   ├── App.jsx
-│   │   └── index.css
-│   ├── vercel.json       # Production SPA rewrites
-│   └── package.json
-└── README.md
+- Link the repository to Vercel with Root Directory set to `frontend`.
+- Set Environment Variable: `VITE_API_BASE=https://your-backend-api.onrender.com`.
+- The included [`frontend/vercel.json`](file:///D:/projects/fordge5/fordge/frontend/vercel.json) automatically handles single-page routing:
+```json
+{
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://your-backend-api.onrender.com/api/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
 ```
 
 ---
 
-## 🔌 API Endpoints
-| Method | Path | Description | Access |
-|--------|------|-------------|--------|
-| GET | `/api/health` | Service health status & DB connectivity | Public |
-| POST | `/api/auth/register-send-code` | Send OTP for citizen registration | Public (rate limited 30s) |
-| POST | `/api/auth/register-verify-code` | Verify OTP & issue signed JWT | Public |
-| POST | `/api/auth/login-send-code` | Send OTP for citizen sign-in | Public (rate limited 30s) |
-| POST | `/api/auth/verify-code` | Verify OTP & issue signed JWT | Public |
-| GET | `/api/reports` | List reports with search & multi-field filters | Public |
-| POST | `/api/reports` | Submit new report with photo/audio evidence | Citizen Auth |
-| GET | `/api/reports/nearby` | Proximity duplicate detection within radius | Public |
-| GET | `/api/reports/export` | Download public dataset as CSV or JSON | Public |
-| GET | `/api/reports/{id}` | Get full report details | Public |
-| GET | `/api/reports/{id}/timeline` | Retrieve chronological audit trail | Public |
-| PATCH| `/api/reports/{id}/status` | Update status (open, in_progress, closed) | Authority Auth |
-| POST | `/api/reports/{id}/resolve` | Resolve issue with official notes & After Photo | Authority Auth |
-| POST | `/api/reports/{id}/upvote` | Citizen endorsement | Citizen Auth |
-| GET | `/api/reports/{id}/comments` | Public discussion thread | Public |
-| POST | `/api/reports/{id}/comments` | Post inquiry or official update | Citizen / Authority |
-| GET | `/api/stats` | Comprehensive stats, SLA rate & department loads | Public |
-| GET | `/api/open311/v2/services.json` | Open311 GeoReport v2 service list | Public |
-| GET | `/api/open311/v2/requests.json` | Open311 GeoReport v2 request queries | Public |
+## ⚠️ Honest Limitations
+
+As an engineering hackathon prototype, Jan Aawaz acknowledges several practical constraints:
+1. **Public Geospatial API Rate Limits**: Reverse geocoding uses the public OpenStreetMap Nominatim API, which strictly enforces a 1 request/second rate limit. In a state-scale deployment, a dedicated self-hosted Nominatim or Mapbox instance would be required.
+2. **Overpass API Latency**: The public Overpass API interpreter occasionally experiences traffic surges leading to 2-4 second response times. Jan Aawaz enforces a hard 5.8-second timeout with graceful fallback to zero sensitive sites so user requests never hang.
+3. **Simulated Dispatch Inbox**: Because real Indian municipal department engineering heads do not expose programmatic intake mailboxes, dispatches are routed to the centralized `DISPATCH_EMAIL` configured in environment settings.
+4. **Browser Speech Synthesis Variations**: The audible plain-language narration utilizes the client device's native `window.speechSynthesis`. Voice naturalness and regional language accent quality depend on the voices installed on the user's operating system and browser.
+
+---
+
+## 📄 License & Attribution
+
+- Built under the **MIT License**.
+- Geodata & Mapping © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
+- Weather data provided by [Open-Meteo](https://open-meteo.com/) under CC BY 4.0.
+- Interoperability protocol aligns with the international [Open311 GeoReport v2](https://www.open311.org) specification.

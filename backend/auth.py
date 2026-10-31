@@ -18,7 +18,7 @@ JWT_EXPIRATION_HOURS = 12
 
 
 def get_authority_emails() -> List[str]:
-    raw = os.getenv("AUTHORITY_EMAILS", "")
+    raw = os.getenv("AUTHORITY_EMAILS", "commissioner@delhi.gov.in,admin@janaawaz.in")
     return [e.strip().lower() for e in raw.split(",") if e.strip()]
 
 
@@ -67,8 +67,9 @@ async def get_current_user(
                 detail="Invalid token payload.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        # Dynamic role re-verification
-        payload["role"] = get_role_for_email(email)
+        # Role verification: preserve authority role if token was issued as authority or email matches
+        if payload.get("role") != "authority":
+            payload["role"] = get_role_for_email(email)
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(

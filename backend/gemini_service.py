@@ -94,6 +94,7 @@ def _fallback_triage(title: str, description: str, category: str) -> Dict[str, A
         "severity": severity,
         "analysis": analysis,
         "recommended_action": action,
+        "action_plan": action,
         "safety_precautions": safety,
         "sla_hours": DEFAULT_SLA_MAP[severity],
         "suggested_department": dept,

@@ -1143,7 +1143,7 @@ async def get_stats():
         )
         overdue_count = sum(
             1 for r in all_reports
-            if (getattr(r, "is_overdue", False) or getattr(r, "escalation_level", 0) >= 3) and r.status in [StatusEnum.open, StatusEnum.in_progress]
+            if (bool(getattr(r, "is_overdue", False)) or ((getattr(r, "escalation_level", 0) or 0) >= 3)) and r.status in [StatusEnum.open, StatusEnum.in_progress]
         )
 
         return StatsOut(

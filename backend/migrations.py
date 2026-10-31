@@ -42,6 +42,35 @@ def _inspect_and_migrate(connection):
         except Exception as e:
             logger.debug(f"Aadhaar nullable adjustment note: {e}")
 
+    # 4. Backfill sequential docket numbers (JA-2026-00001) for existing reports ordered by created_at
+    if "reports" in existing_tables:
+        try:
+            reports_rows = connection.execute(
+                text("SELECT id, docket_no FROM reports ORDER BY created_at ASC")
+            ).fetchall()
+            max_num = 0
+            for r in reports_rows:
+                if r[1] and r[1].startswith("JA-2026-"):
+                    try:
+                        n = int(r[1].split("-")[-1])
+                        if n > max_num:
+                            max_num = n
+                    except ValueError:
+                        pass
+
+            counter = max_num
+            for r in reports_rows:
+                if not r[1]:
+                    counter += 1
+                    docket_val = f"JA-2026-{counter:05d}"
+                    connection.execute(
+                        text("UPDATE reports SET docket_no = :docket WHERE id = :id"),
+                        {"docket": docket_val, "id": r[0]},
+                    )
+                    logger.info(f"Backfilled report {r[0]} with docket_no={docket_val}")
+        except Exception as e:
+            logger.warning(f"Error backfilling docket numbers: {e}")
+
 
 async def ensure_schema():
     """Runs at application startup to synchronize database tables and columns."""

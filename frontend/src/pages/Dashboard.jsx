@@ -120,22 +120,12 @@ export default function Dashboard() {
     setSearchingTicket(true)
     setTrackingResult(null)
     try {
-      // Look up by ID directly
-      const cleanId = trackingId.replace(/^(JA-2026-|CL-)/i, '').trim()
-      const { data } = await axios.get(`/api/reports/${cleanId}`)
+      const { data } = await axios.get('/api/reports/lookup', {
+        params: { q: trackingId.trim() }
+      })
       setTrackingResult(data)
-    } catch {
-      // If direct ID lookup fails, search reports registry
-      try {
-        const { data } = await axios.get('/api/reports', { params: { search: trackingId.trim() } })
-        if (data.length > 0) {
-          setTrackingResult(data[0])
-        } else {
-          toast.error('No complaint found matching this reference number')
-        }
-      } catch {
-        toast.error('Complaint lookup failed')
-      }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'No complaint found matching this reference number')
     } finally {
       setSearchingTicket(false)
     }
@@ -317,7 +307,7 @@ export default function Dashboard() {
                     </p>
                     <h2 className="mt-2 font-serif text-3xl font-bold">Your report is in motion.</h2>
                     <p className="mt-3 max-w-sm text-sm leading-6 text-[#687977] dark:text-[#95a9a6]">
-                      AI identified <strong className="text-[#0d3035] dark:text-[#e8b855]">{submittedReport.category.replace('_', ' ')}</strong> and forwarded docket <strong className="text-[#0d3035] dark:text-white">#{submittedReport.id.substring(0, 8).toUpperCase()}</strong> to {submittedReport.routed_to}.
+                      AI identified <strong className="text-[#0d3035] dark:text-[#e8b855]">{submittedReport.category.replace('_', ' ')}</strong> and forwarded docket <strong className="text-[#0d3035] dark:text-white font-mono">{submittedReport.docket_no || `#${submittedReport.id.substring(0, 8).toUpperCase()}`}</strong> to {submittedReport.routed_to}.
                     </p>
                     <div className="mt-6 grid w-full grid-cols-2 gap-3 text-left">
                       <div className="rounded-xl bg-[#fff4dd] dark:bg-amber-950/40 p-3.5 border border-amber-200 dark:border-amber-900/40">

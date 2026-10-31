@@ -39,6 +39,7 @@ class Report(Base):
     __tablename__ = "reports"
 
     id = Column(String(36), primary_key=True)
+    docket_no = Column(String(32), unique=True, nullable=True, index=True)
     citizen_id = Column(String(36), ForeignKey("citizens.id", ondelete="SET NULL"), nullable=True, index=True)
     citizen_email = Column(String(255), nullable=True, index=True)
     title = Column(String(200), nullable=False)

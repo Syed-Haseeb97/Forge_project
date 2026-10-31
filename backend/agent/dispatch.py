@@ -71,8 +71,7 @@ async def draft_and_send_dispatch(
                     )
 
             # Metadata formatting
-            short_id = str(report.id)[:8].upper()
-            docket_id = f"JA-2026-{short_id}"
+            docket_id = report.docket_no or f"JA-2026-{str(report.id)[:8].upper()}"
             maps_link = (
                 f"https://www.google.com/maps?q={report.latitude},{report.longitude}"
                 if report.latitude and report.longitude

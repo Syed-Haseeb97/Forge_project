@@ -119,6 +119,7 @@ async def health_check():
 # ── Schemas ────────────────────────────────────────────────────────────────────
 class ReportOut(BaseModel):
     id: str
+    docket_no: Optional[str] = None
     title: str
     description: str
     category: str
@@ -593,8 +594,20 @@ async def submit_report(
             if cit:
                 citizen_id = cit.id
 
+        # Determine sequential docket_no (JA-2026-00001)
+        docket_stmt = select(Report.docket_no).where(Report.docket_no.like("JA-2026-%")).order_by(Report.docket_no.desc()).limit(1)
+        last_docket = (await session.execute(docket_stmt)).scalar_one_or_none()
+        next_seq = 1
+        if last_docket:
+            try:
+                next_seq = int(last_docket.split("-")[-1]) + 1
+            except ValueError:
+                next_seq = 1
+        docket_no = f"JA-2026-{next_seq:05d}"
+
         report = Report(
             id=report_id,
+            docket_no=docket_no,
             citizen_id=citizen_id,
             citizen_email=actual_citizen_email.strip().lower() if actual_citizen_email else None,
             title=title,
@@ -797,6 +810,61 @@ async def export_reports(
             io.BytesIO(output.getvalue().encode("utf-8")),
             media_type="text/csv",
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+
+@app.get("/api/reports/lookup", response_model=ReportOut)
+async def lookup_report(q: str = Query(..., description="Docket number, UUID, or 8-char ID prefix")):
+    query = q.strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="Search query 'q' cannot be empty.")
+
+    clean_q = query.lstrip("#").strip()
+
+    async with AsyncSessionLocal() as session:
+        # 1. Direct docket_no match (case-insensitive)
+        res = await session.execute(
+            select(Report).where(func.lower(Report.docket_no) == clean_q.lower())
+        )
+        report = res.scalar_one_or_none()
+        if report:
+            return report
+
+        # 2. Try adding prefix if query is digits or 2026-XXXXX
+        if clean_q.isdigit():
+            padded = f"JA-2026-{int(clean_q):05d}"
+            res = await session.execute(
+                select(Report).where(func.lower(Report.docket_no) == padded.lower())
+            )
+            report = res.scalar_one_or_none()
+            if report:
+                return report
+        elif clean_q.lower().startswith("2026-"):
+            res = await session.execute(
+                select(Report).where(func.lower(Report.docket_no) == f"ja-{clean_q.lower()}")
+            )
+            report = res.scalar_one_or_none()
+            if report:
+                return report
+
+        # 3. Exact full UUID match
+        res = await session.execute(select(Report).where(Report.id == clean_q))
+        report = res.scalar_one_or_none()
+        if report:
+            return report
+
+        # 4. ID prefix match (e.g. 8-char prefix)
+        if len(clean_q) >= 6:
+            res = await session.execute(
+                select(Report).where(Report.id.like(f"{clean_q}%")).limit(1)
+            )
+            report = res.scalar_one_or_none()
+            if report:
+                return report
+
+        raise HTTPException(
+            status_code=404,
+            detail=f"No civic docket found matching reference '{q}'. Please verify your reference number.",
         )
 
 

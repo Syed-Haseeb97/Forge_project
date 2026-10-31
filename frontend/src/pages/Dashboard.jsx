@@ -677,7 +677,7 @@ export default function Dashboard() {
               <div>
                 <div className="flex items-center gap-2">
                   <p className="text-[10px] font-bold tracking-[0.18em] uppercase text-[#ba7c29]">
-                    OFFICIAL DISPATCH QUEUE
+                    PRIORITY DISPATCH QUEUE
                   </p>
                   <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-[#e3f0ea] dark:bg-[#123830] text-[#2f7661] dark:text-[#70b99e] font-bold">
                     {authorityQueue.total_queued} Open Tickets Ranked
@@ -690,7 +690,7 @@ export default function Dashboard() {
             </div>
 
             <p className="text-xs text-[#556b68] dark:text-[#95a9a6] max-w-md">
-              Transparent multi-signal score: severity weight (100/60/30/10), statutory SLA urgency (+50/30/15), citizen endorsements, 300m cluster density (+20), and heavy rain risk (+15).
+              Transparent multi-signal score: severity weight (100/60/30/10), target SLA urgency (+50/30/15), citizen endorsements, 300m cluster density (+20), and heavy rain risk (+15).
             </p>
           </div>
 

@@ -563,7 +563,7 @@ async def _execute_agent_pipeline(
             "Evaluate:\n"
             "1. Is the assigned severity appropriate given physical hazards and vulnerable sites?\n"
             "2. Is the department routing correct for this failure category?\n"
-            "3. Is the SLA turnaround realistic and statutory compliant?\n\n"
+            "3. Is the SLA turnaround realistic and guideline compliant?\n\n"
             f"Incident: {title}\n"
             f"Category: {category}\n"
             f"Description: {description}\n\n"
@@ -854,7 +854,7 @@ async def generate_why_now_rationales(tickets_data: List[Dict[str, Any]]) -> Dic
         "You are the Senior Municipal Dispatch Commander.\n"
         "Provide a crisp, actionable 1-sentence 'why now' dispatch justification for each ticket.\n"
         "Explain specifically why this issue must be prioritized for dispatch right now "
-        "(e.g. impending rain flooding the defect, safety hazard near pedestrians, statutory SLA breach, high community endorsements):\n\n"
+        "(e.g. impending rain flooding the defect, safety hazard near pedestrians, target SLA breach, high community endorsements):\n\n"
         f"{context_text}\n\n"
         "Return structured JSON matching WhyNowList: {items: [{report_id: str, why_now: str}]}."
     )
@@ -884,7 +884,7 @@ async def generate_why_now_rationales(tickets_data: List[Dict[str, Any]]) -> Dic
     for t in tickets_data:
         sev = str(t.get("severity", "medium")).upper()
         if t.get("is_overdue"):
-            urgency = "Statutory SLA deadline breached; immediate crew dispatch required to resolve non-compliance."
+            urgency = "Target SLA deadline breached; immediate crew dispatch recommended."
         elif t.get("rain_risk"):
             urgency = f"High priority {sev} hazard with heavy rain forecasted to aggravate structural erosion."
         elif t.get("hotspot_count", 0) >= 2:

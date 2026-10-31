@@ -29,10 +29,38 @@ def get_sla_time_scale() -> float:
         return 1.0
 
 
+def _get_scale_for_report(report: Report, global_scale: float) -> float:
+    """Return applicable SLA time scale for an individual report.
+    
+    Applies only if report.demo_accel is True or report was created after SLA_SCALE_FROM.
+    Otherwise evaluates at 1.0x (real time).
+    """
+    if getattr(report, "demo_accel", False):
+        return global_scale
+
+    scale_from_raw = os.getenv("SLA_SCALE_FROM")
+    if scale_from_raw and report.created_at:
+        try:
+            scale_from_dt = datetime.fromisoformat(scale_from_raw.replace("Z", "+00:00"))
+            rpt_dt = report.created_at
+            if scale_from_dt.tzinfo is not None and rpt_dt.tzinfo is None:
+                rpt_dt = rpt_dt.replace(tzinfo=scale_from_dt.tzinfo)
+            elif scale_from_dt.tzinfo is None and rpt_dt.tzinfo is not None:
+                scale_from_dt = scale_from_dt.replace(tzinfo=rpt_dt.tzinfo)
+            if rpt_dt >= scale_from_dt:
+                return global_scale
+        except Exception as e:
+            logger.warning(f"Failed parsing SLA_SCALE_FROM ({scale_from_raw}): {e}")
+
+    return 1.0
+
+
 async def run_watchdog_check() -> Dict[str, Any]:
     """Inspect all active reports and apply idempotent tiered SLA escalations."""
     now = datetime.utcnow()
     scale = get_sla_time_scale()
+    max_dispatches = int(os.getenv("WATCHDOG_MAX_DISPATCH_PER_RUN", "3"))
+    dispatches_sent = 0
 
     checked_count = 0
     escalated_items: List[Dict[str, Any]] = []
@@ -47,9 +75,10 @@ async def run_watchdog_check() -> Dict[str, Any]:
             checked_count = len(active_reports)
 
             for report in active_reports:
+                report_scale = _get_scale_for_report(report, scale)
                 sla_hrs = float(report.sla_hours or 72)
                 # Apply time scale compression
-                scaled_sla_hrs = sla_hrs / max(0.0001, scale)
+                scaled_sla_hrs = sla_hrs / max(0.0001, report_scale)
                 effective_deadline = report.created_at + timedelta(hours=scaled_sla_hrs)
 
                 if now > effective_deadline:
@@ -73,6 +102,10 @@ async def run_watchdog_check() -> Dict[str, Any]:
 
                     # Escalate one step at a time to maintain clean audit trail
                     if target_level > current_level:
+                        if dispatches_sent >= max_dispatches:
+                            logger.info(f"SLA watchdog reached max dispatch cap ({max_dispatches}) for this cycle.")
+                            break
+
                         next_level = current_level + 1
                         report.escalation_level = next_level
 
@@ -88,6 +121,7 @@ async def run_watchdog_check() -> Dict[str, Any]:
                             kind="escalation",
                             escalation_level=next_level,
                         )
+                        dispatches_sent += 1
 
                         escalated_items.append({
                             "report_id": report.id,

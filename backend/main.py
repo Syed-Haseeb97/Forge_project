@@ -629,6 +629,8 @@ async def submit_report(
                 next_seq = 1
         docket_no = f"JA-2026-{next_seq:05d}"
 
+        is_demo_accel = DEV_MODE or (get_sla_time_scale() > 1.0)
+
         report = Report(
             id=report_id,
             docket_no=docket_no,
@@ -654,6 +656,7 @@ async def submit_report(
             severity_rationale=severity_rationale,
             detected_language=detected_language,
             locality=locality,
+            demo_accel=is_demo_accel,
             created_at=now,
             updated_at=now,
         )

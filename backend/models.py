@@ -59,6 +59,12 @@ class Report(Base):
     resolved_media_url = Column(String(500), nullable=True)
     resolution_notes = Column(Text, nullable=True)
     resolved_at = Column(DateTime, nullable=True)
+    # Agentic triage pipeline audit fields
+    agent_trace = Column(Text, nullable=True)
+    confidence = Column(Float, nullable=True)
+    severity_rationale = Column(Text, nullable=True)
+    detected_language = Column(String(50), nullable=True)
+    locality = Column(String(200), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

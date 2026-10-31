@@ -6,6 +6,7 @@ Compatible with SQLite and PostgreSQL (Supabase).
 import logging
 from sqlalchemy import inspect, text
 from database import engine, Base
+import models  # Ensure all model tables are registered in Base.metadata
 
 logger = logging.getLogger("janaawaz.migrations")
 

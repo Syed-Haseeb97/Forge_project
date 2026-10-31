@@ -105,85 +105,30 @@ async def analyze_report(
     description: str,
     category: str,
     location: str = "Unspecified",
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
     media_path: Optional[str] = None,
     media_bytes: Optional[bytes] = None,
     media_mime: Optional[str] = None,
+    db_session=None,
 ) -> Dict[str, Any]:
+    """Execute the Jan Aawaz multi-signal agentic triage pipeline.
+    
+    Returns backward-compatible keys:
+    ai_analysis, severity, action_plan, safety_precautions, sla_hours, routed_to
+    Plus additive agentic audit fields:
+    agent_trace, confidence, severity_rationale, detected_language, locality, visible_hazards, evidence_severity
     """
-    Returns a dictionary with:
-    {
-        "ai_analysis": str,
-        "severity": str,
-        "action_plan": str,
-        "safety_precautions": str,
-        "sla_hours": int,
-        "routed_to": str
-    }
-    """
-    client = _get_client()
+    from agent.pipeline import run_agent_pipeline
 
-    if client:
-        candidate_models = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.5-flash"]
-        prompt_text = SEVERITY_PROMPT.format(
-            title=title, category=category, location=location, description=description
-        )
-
-        contents = []
-        if media_bytes and media_mime:
-            if media_mime.startswith("image/"):
-                contents.append(
-                    types.Part.from_bytes(data=media_bytes, mime_type=media_mime)
-                )
-                prompt_text += "\n\nAn image of the issue has been attached. Carefully examine visible structural damage, cracks, water levels, or hazards to refine severity."
-            elif media_mime.startswith("audio/"):
-                contents.append(
-                    types.Part.from_bytes(data=media_bytes, mime_type=media_mime)
-                )
-                prompt_text += "\n\nAn audio recording from the reporting citizen is attached. Transcribe and consider auditory cues."
-
-        contents.append(types.Part.from_text(text=prompt_text))
-
-        for model_name in candidate_models:
-            try:
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=contents,
-                )
-                raw = response.text or ""
-                match = re.search(r'\{.*\}', raw, re.DOTALL)
-                if match:
-                    data = json.loads(match.group())
-                    sev = str(data.get("severity", "medium")).lower()
-                    if sev not in ["low", "medium", "high", "critical"]:
-                        sev = "medium"
-
-                    analysis = data.get("analysis", "")
-                    action = data.get("recommended_action", "")
-                    safety = data.get("safety_precautions", "Follow standard municipal safety guidelines.")
-                    sla = int(data.get("sla_hours", DEFAULT_SLA_MAP.get(sev, 72)))
-                    suggested_dept = data.get("suggested_department") or ROUTING_MAP.get(category, ROUTING_MAP["other"])
-
-                    full_analysis = f"{analysis}\n\n**Recommended Action:** {action}"
-                    return {
-                        "ai_analysis": full_analysis,
-                        "severity": sev,
-                        "action_plan": action,
-                        "safety_precautions": safety,
-                        "sla_hours": sla,
-                        "routed_to": suggested_dept,
-                    }
-            except Exception as e:
-                print(f"Gemini model {model_name} attempt error: {e}")
-                continue
-
-    # Fallback to local heuristic
-    fallback = _fallback_triage(title, description, category)
-    full_analysis = f"{fallback['analysis']}\n\n**Recommended Action:** {fallback['recommended_action']}"
-    return {
-        "ai_analysis": full_analysis,
-        "severity": fallback["severity"],
-        "action_plan": fallback["recommended_action"],
-        "safety_precautions": fallback["safety_precautions"],
-        "sla_hours": fallback["sla_hours"],
-        "routed_to": fallback["suggested_department"],
-    }
+    return await run_agent_pipeline(
+        title=title,
+        description=description,
+        category=category,
+        location=location,
+        latitude=latitude,
+        longitude=longitude,
+        media_bytes=media_bytes,
+        media_mime=media_mime,
+        db_session=db_session,
+    )

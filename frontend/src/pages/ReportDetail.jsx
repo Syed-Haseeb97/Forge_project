@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import axios from 'axios'
 import toast from 'react-hot-toast'
-import { Star, ThumbsUp, Send } from 'lucide-react'
+import { Star, ThumbsUp, Send, ChevronDown, ChevronUp, Cpu, Sparkles } from 'lucide-react'
 import CivicIcon from '../components/CivicIcon'
 import { isWatched, toggleWatchlist } from '../components/constants'
 import CivicMap from '../components/CivicMap'
@@ -19,6 +19,7 @@ export default function ReportDetail() {
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
   const [comments, setComments] = useState([])
+  const [showTrace, setShowTrace] = useState(true)
   const [commentForm, setCommentForm] = useState({
     author: user?.name || '',
     role: isAuthority ? 'authority' : 'citizen',
@@ -180,6 +181,15 @@ export default function ReportDetail() {
   const isHigh = report.severity === 'high'
   const [analysisText, recommendedActionText] = (report.ai_analysis || '').split('**Recommended Action:**')
   const referenceCode = `JA-2026-${String(report.id).padStart(5, '0')}`
+
+  let traceSteps = []
+  if (report.agent_trace) {
+    try {
+      traceSteps = typeof report.agent_trace === 'string' ? JSON.parse(report.agent_trace) : report.agent_trace
+    } catch {
+      traceSteps = []
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[#f6f4ee] dark:bg-[#06181b] text-[#102a2f] dark:text-[#f6f4ee] transition-colors py-8 sm:py-12">
@@ -390,6 +400,138 @@ export default function ReportDetail() {
                     {report.safety_precautions}
                   </p>
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Collapsible AI Reasoning Trace Card */}
+        {(report.agent_trace || report.severity_rationale) && (
+          <div className="rounded-[26px] border border-[#173e42]/15 dark:border-white/10 bg-white dark:bg-[#0b2529] p-6 sm:p-8 space-y-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-[#0d3035] text-[#e8b855]">
+                  <Cpu size={20} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[10px] font-bold tracking-[0.16em] uppercase text-[#ba7c29]">
+                      AGENTIC CIVIC TRIAGE PIPELINE
+                    </p>
+                    {report.confidence !== null && report.confidence !== undefined && (
+                      <span className="rounded-full bg-[#e3f0ea] dark:bg-[#123830] px-2 py-0.5 text-[10px] font-bold text-[#2f7661] dark:text-[#70b99e]">
+                        {Math.round(report.confidence * 100)}% Confidence
+                      </span>
+                    )}
+                  </div>
+                  <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+                    AI Reasoning Trace & Decision Signals
+                  </h2>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowTrace(!showTrace)}
+                className="flex items-center gap-1.5 rounded-full border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] px-3.5 py-1.5 text-xs font-bold text-[#556b68] dark:text-[#95a9a6] hover:text-[#0d3035] dark:hover:text-white transition"
+              >
+                <span>{showTrace ? 'Collapse Trace' : 'Expand Trace'}</span>
+                {showTrace ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+              </button>
+            </div>
+
+            {showTrace && (
+              <div className="space-y-4 pt-2">
+                {/* Confidence Bar */}
+                {report.confidence !== null && report.confidence !== undefined && (
+                  <div className="rounded-xl border border-[#173e42]/10 dark:border-white/10 bg-[#f8f8f4] dark:bg-[#06181b] p-3.5 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="text-[#556b68] dark:text-[#95a9a6]">Triage Confidence Rating</span>
+                      <span className="font-mono text-[#0d3035] dark:text-[#e8b855]">{Math.round(report.confidence * 100)}%</span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-[#ba7c29] to-[#347161] transition-all duration-500"
+                        style={{ width: `${Math.min(100, Math.max(10, Math.round(report.confidence * 100)))}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Triage Rationale Quote Box */}
+                {report.severity_rationale && (
+                  <div className="rounded-xl border border-[#ba7c29]/30 bg-[#fffaf0] dark:bg-[#1a2522] p-4 text-xs leading-relaxed">
+                    <div className="flex items-center gap-2 mb-1.5 text-[#ba7c29] font-bold uppercase text-[10px] tracking-wider">
+                      <Sparkles size={14} />
+                      <span>Multi-Signal Synthesis Rationale</span>
+                    </div>
+                    <p className="text-[#3b4e4c] dark:text-[#cad8d5] font-medium italic">
+                      “{report.severity_rationale}”
+                    </p>
+                    {(report.locality || report.detected_language) && (
+                      <p className="mt-2 text-[10px] text-[#718481] dark:text-[#8ea5a2] border-t border-[#ba7c29]/15 pt-2">
+                        {report.locality && <span>Locality Reference: <strong>{report.locality}</strong></span>}
+                        {report.locality && report.detected_language && <span className="mx-2">•</span>}
+                        {report.detected_language && <span>Detected Citizen Language: <strong>{report.detected_language}</strong></span>}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Step-by-Step Execution Trace */}
+                {traceSteps.length > 0 && (
+                  <div className="space-y-2.5">
+                    <p className="text-[10px] font-bold tracking-wider uppercase text-[#718481] dark:text-[#8ea5a2]">
+                      Pipeline Execution Sequence ({traceSteps.length} steps)
+                    </p>
+                    <div className="divide-y divide-[#173e42]/10 dark:divide-white/10 rounded-xl border border-[#173e42]/10 dark:border-white/10 bg-[#f8f8f4] dark:bg-[#06181b] overflow-hidden">
+                      {traceSteps.map((step, idx) => {
+                        const isFallback = step.status === 'fallback'
+                        const isSuccess = step.status === 'success'
+                        const isError = step.status === 'error'
+                        return (
+                          <div key={idx} className="p-3.5 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="flex items-start gap-3">
+                              <span className="flex size-7 items-center justify-center rounded-lg bg-white dark:bg-[#0b2529] border border-[#173e42]/10 dark:border-white/10 text-[#0d3035] dark:text-[#e8b855] font-mono text-[11px] font-bold shrink-0 mt-0.5 sm:mt-0">
+                                {idx + 1}
+                              </span>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+                                    {step.step.replace('_', ' ').toUpperCase()}
+                                  </span>
+                                  <span className="font-mono text-[10px] text-[#718481] dark:text-[#8ea5a2]">
+                                    via {step.tool}
+                                  </span>
+                                </div>
+                                <p className="mt-0.5 text-[#556b68] dark:text-[#95a9a6] text-xs">
+                                  {step.summary}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                              <span className="font-mono text-[10px] text-[#8a9b98]">
+                                {step.duration_ms}ms
+                              </span>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                isSuccess
+                                  ? 'bg-[#e3f0ea] dark:bg-[#123830] text-[#2f7661] dark:text-[#70b99e]'
+                                  : isFallback
+                                  ? 'bg-[#fff4dd] dark:bg-amber-950/60 text-[#94611b] dark:text-amber-300'
+                                  : isError
+                                  ? 'bg-[#ffebe8] dark:bg-red-950/60 text-[#b04b37]'
+                                  : 'bg-black/5 dark:bg-white/10 text-[#718481]'
+                              }`}>
+                                {step.status}
+                              </span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

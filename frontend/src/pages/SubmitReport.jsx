@@ -22,6 +22,7 @@ export default function SubmitReport() {
   const [preview, setPreview] = useState(null)
   const [fileType, setFileType] = useState('image')
   const [submitting, setSubmitting] = useState(false)
+  const [autofilling, setAutofilling] = useState(false)
   const [locating, setLocating] = useState(false)
   const [nearbyReports, setNearbyReports] = useState([])
   const [checkingNearby, setCheckingNearby] = useState(false)
@@ -110,6 +111,56 @@ export default function SubmitReport() {
   const handleClearMedia = () => {
     setFile(null)
     setPreview(null)
+  }
+
+  // Auto-fill from photo or voice note via Gemini AI
+  const handleAutoFill = async () => {
+    if (!file) {
+      toast.error('Please attach a photo or audio recording first')
+      return
+    }
+
+    setAutofilling(true)
+    const toastId = toast.loading('Multimodal AI is analyzing evidence...')
+
+    try {
+      const fd = new FormData()
+      fd.append('media', file)
+      if (form.description.trim()) {
+        fd.append('text', form.description)
+      } else if (form.title.trim()) {
+        fd.append('text', form.title)
+      }
+
+      const { data } = await axios.post('/api/ai/prefill', fd)
+
+      let filledCount = 0
+      setForm(prev => {
+        const next = { ...prev }
+        if (!prev.title.trim() && data.title) {
+          next.title = data.title
+          filledCount++
+        }
+        if ((!prev.category || prev.category === 'road_damage' || prev.category === 'other') && data.category) {
+          next.category = data.category
+          filledCount++
+        }
+        if (!prev.description.trim() && data.description) {
+          next.description = data.description
+          filledCount++
+        }
+        return next
+      })
+
+      toast.success(
+        `AI auto-filled details (${data.detected_language || 'Multimodal'})`,
+        { id: toastId, icon: '✨' }
+      )
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Auto-fill failed to interpret evidence', { id: toastId })
+    } finally {
+      setAutofilling(false)
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -251,7 +302,6 @@ export default function SubmitReport() {
                     <CivicIcon name="check" size={13} />
                     <span>
                       Verified Citizen: {user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : user?.email}
-                      {user?.aadhaar_last4 && ` · UID: •••• ${user.aadhaar_last4}`}
                     </span>
                   </div>
                   <p className="mt-2 text-xs sm:text-sm text-[#5f716e] dark:text-[#95a9a6]">
@@ -425,6 +475,22 @@ export default function SubmitReport() {
                           <img src={preview} alt="Attached Evidence" className="w-full object-cover" />
                         </div>
                       )}
+
+                      {/* Auto-fill from photo/voice Button */}
+                      <div className="mt-3 pt-3 border-t border-[#173e42]/10 dark:border-[#173e42]/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={handleAutoFill}
+                          disabled={autofilling}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#ba7c29] hover:bg-[#a66e24] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-sm transition disabled:opacity-50"
+                        >
+                          <CivicIcon name="sparkle" size={14} />
+                          <span>{autofilling ? 'Analyzing Evidence...' : 'Auto-fill from photo/voice'}</span>
+                        </button>
+                        <span className="text-[10px] text-[#6c7c7a] dark:text-[#95a9a6]">
+                          ✨ Extracts title, category & observations to empty fields
+                        </span>
+                      </div>
                     </div>
                   )}
                 </div>

@@ -3,6 +3,7 @@ Fordge – Transparent Civic Grievance & Infrastructure Triage System
 Backend: FastAPI + SQLite + Gemini API + Open311 GeoReport v2
 """
 import os
+import json
 import math
 import uuid
 import csv
@@ -113,6 +114,11 @@ class ReportOut(BaseModel):
     resolved_media_url: Optional[str]
     resolution_notes: Optional[str]
     resolved_at: Optional[datetime]
+    agent_trace: Optional[str] = None
+    confidence: Optional[float] = None
+    severity_rationale: Optional[str] = None
+    detected_language: Optional[str] = None
+    locality: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -501,27 +507,38 @@ async def submit_report(
         content = await media.read()
         media_url = await save_media(filename, content, media.content_type)
 
-    # AI multimodal analysis
-    analysis_res = await analyze_report(
-        title=title,
-        description=description,
-        category=category,
-        location=location,
-        media_path=str(UPLOAD_DIR / f"{report_id}{Path(media.filename).suffix}") if media and media.filename else None,
-        media_bytes=content if media and media.filename else None,
-        media_mime=media.content_type if media else None,
-    )
-
-    severity_str = analysis_res.get("severity", "medium")
-    severity = SeverityEnum(severity_str)
-    routed_to = analysis_res.get("routed_to") or ROUTING_MAP.get(category, ROUTING_MAP["other"])
-    action_plan = analysis_res.get("action_plan")
-    safety_precautions = analysis_res.get("safety_precautions")
-    sla_hours = analysis_res.get("sla_hours", 72)
-    ai_analysis = analysis_res.get("ai_analysis")
-
     now = datetime.utcnow()
     async with AsyncSessionLocal() as session:
+        # AI multimodal analysis with live database session for recurrence check
+        analysis_res = await analyze_report(
+            title=title,
+            description=description,
+            category=category,
+            location=location,
+            latitude=latitude,
+            longitude=longitude,
+            media_path=str(UPLOAD_DIR / f"{report_id}{Path(media.filename).suffix}") if media and media.filename else None,
+            media_bytes=content if media and media.filename else None,
+            media_mime=media.content_type if media else None,
+            db_session=session,
+        )
+
+        severity_str = analysis_res.get("severity", "medium")
+        severity = SeverityEnum(severity_str)
+        routed_to = analysis_res.get("routed_to") or ROUTING_MAP.get(category, ROUTING_MAP["other"])
+        action_plan = analysis_res.get("action_plan")
+        safety_precautions = analysis_res.get("safety_precautions")
+        sla_hours = analysis_res.get("sla_hours", 72)
+        ai_analysis = analysis_res.get("ai_analysis")
+
+        # Serialized trace & new audit fields
+        agent_trace_data = analysis_res.get("agent_trace")
+        agent_trace_str = json.dumps(agent_trace_data) if agent_trace_data else None
+        confidence = analysis_res.get("confidence")
+        severity_rationale = analysis_res.get("severity_rationale")
+        detected_language = analysis_res.get("detected_language")
+        locality = analysis_res.get("locality") or location
+
         if not citizen_id and actual_citizen_email:
             res = await session.execute(select(Citizen).where(Citizen.email == actual_citizen_email.strip().lower()))
             cit = res.scalar_one_or_none()
@@ -547,6 +564,11 @@ async def submit_report(
             routed_to=routed_to,
             upvotes=0,
             media_url=media_url,
+            agent_trace=agent_trace_str,
+            confidence=confidence,
+            severity_rationale=severity_rationale,
+            detected_language=detected_language,
+            locality=locality,
             created_at=now,
             updated_at=now,
         )
@@ -559,7 +581,7 @@ async def submit_report(
             status=StatusEnum.open.value,
             actor="Citizen Reporter",
             action_type="submitted",
-            notes=f"Civic grievance registered at {location}.",
+            notes=f"Civic grievance registered at {locality or location}.",
             media_url=media_url,
         )
 
@@ -567,14 +589,37 @@ async def submit_report(
             session=session,
             report_id=report_id,
             status=StatusEnum.open.value,
-            actor="Fordge AI Triage",
+            actor="Jan Aawaz AI Triage",
             action_type="ai_triage",
-            notes=f"Assessed severity: {severity_str.upper()}. Routed to {routed_to}. Target SLA: {sla_hours} hours.",
+            notes=f"Assessed as {severity_str.upper()} priority ({sla_hours}h SLA). Routed to {routed_to}. Rationale: {severity_rationale or 'Evaluated based on multi-signal evidence'}",
         )
 
         await session.commit()
         await session.refresh(report)
         return report
+
+
+@app.post("/api/ai/prefill")
+async def ai_prefill(
+    media: Optional[UploadFile] = File(None),
+    text: Optional[str] = Form(None),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Analyze attached photo/audio/notes and return suggested title, category, description, and language."""
+    from agent.pipeline import prefill_from_media
+
+    media_bytes = None
+    media_mime = None
+    if media and media.filename:
+        media_bytes = await media.read()
+        media_mime = media.content_type
+
+    res = await prefill_from_media(
+        media_bytes=media_bytes,
+        media_mime=media_mime,
+        text_hint=text,
+    )
+    return res
 
 
 @app.get("/api/reports", response_model=List[ReportOut])

@@ -4,16 +4,89 @@ Compares Before vs After photos using Gemini vision and issues structured verdic
 fixed | partially_fixed | not_fixed | different_location | unclear
 """
 import os
+import io
+import math
 import logging
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 import httpx
+from PIL import Image, ExifTags
 from google import genai
 from google.genai import types
 
 from agent.schemas import ResolutionVerification
 
 logger = logging.getLogger("janaawaz.agent.verification")
+
+
+def _extract_gps_coords(image_bytes: bytes) -> Optional[Tuple[float, float]]:
+    """Extract decimal (latitude, longitude) from image EXIF metadata if present."""
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        exif = img.getexif()
+        if not exif:
+            return None
+
+        gps_ifd = None
+        for tag_id, value in exif.items():
+            tag_name = ExifTags.TAGS.get(tag_id, tag_id)
+            if tag_name == "GPSInfo" or tag_id == 34853:
+                gps_ifd = value
+                break
+
+        if not gps_ifd:
+            try:
+                gps_ifd = exif.get_ifd(ExifTags.IFD.GPSInfo)
+            except Exception:
+                gps_ifd = None
+
+        if not gps_ifd:
+            return None
+
+        gps_tags = {}
+        for k, v in gps_ifd.items():
+            name = ExifTags.GPSTAGS.get(k, k)
+            gps_tags[name] = v
+
+        lat_val = gps_tags.get("GPSLatitude")
+        lat_ref = gps_tags.get("GPSLatitudeRef")
+        lon_val = gps_tags.get("GPSLongitude")
+        lon_ref = gps_tags.get("GPSLongitudeRef")
+
+        if not lat_val or not lon_val:
+            return None
+
+        def _to_degrees(v):
+            if isinstance(v, (list, tuple)) and len(v) == 3:
+                d = float(v[0])
+                m = float(v[1])
+                s = float(v[2])
+                return d + (m / 60.0) + (s / 3600.0)
+            return float(v)
+
+        lat = _to_degrees(lat_val)
+        if lat_ref in ("S", "s"):
+            lat = -lat
+
+        lon = _to_degrees(lon_val)
+        if lon_ref in ("W", "w"):
+            lon = -lon
+
+        return lat, lon
+    except Exception as e:
+        logger.debug(f"Could not parse EXIF GPS: {e}")
+        return None
+
+
+def _haversine_distance_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate geographic distance in meters between two lat/lon pairs."""
+    R = 6371000.0
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2.0) ** 2
+    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+    return R * c
 
 
 def _get_client() -> Optional[genai.Client]:
@@ -80,23 +153,39 @@ async def verify_repair_evidence(
     description: str,
     resolution_notes: str,
     upload_dir: str = "./uploads",
+    report_latitude: Optional[float] = None,
+    report_longitude: Optional[float] = None,
 ) -> ResolutionVerification:
     """Compare before and after photographic evidence to verify physical remediation."""
     client = _get_client()
     models = _get_models()
 
+    # Step 1: EXIF GPS audit
+    exif_gps = _extract_gps_coords(after_bytes)
+    gps_info_str = "no GPS metadata"
+    if exif_gps and report_latitude is not None and report_longitude is not None:
+        dist_m = _haversine_distance_meters(exif_gps[0], exif_gps[1], report_latitude, report_longitude)
+        if dist_m > 150.0:
+            return ResolutionVerification(
+                verdict="different_location",
+                confidence=0.95,
+                explanation=f"After-photo EXIF GPS indicates coordinates {round(dist_m)} meters from reported incident location (threshold 150 m). Physical location mismatch.",
+            )
+        gps_info_str = f"EXIF GPS verified within {round(dist_m)}m of report coordinates"
+
+    # Step 2: Original baseline photo verification
     original_info = await _load_original_bytes(original_media_url, upload_dir=upload_dir)
 
     if not original_info:
-        # Only after-photo is available
         return ResolutionVerification(
-            verdict="fixed",
-            confidence=0.75,
-            explanation="Single completion photograph submitted. Original photographic baseline was unavailable for comparative inspection.",
+            verdict="unclear",
+            confidence=0.3,
+            explanation=f"Original photographic baseline was missing or unreadable. Comparative verification cannot be established ({gps_info_str}).",
         )
 
     orig_bytes, orig_mime = original_info
 
+    # Step 3: Multimodal comparative verification via Gemini
     if client:
         prompt_parts: List[Any] = [
             types.Part.from_bytes(data=orig_bytes, mime_type=orig_mime),
@@ -134,6 +223,8 @@ async def verify_repair_evidence(
                 )
                 if resp.text:
                     verif = ResolutionVerification.model_validate_json(resp.text)
+                    if gps_info_str not in verif.explanation:
+                        verif.explanation = f"{verif.explanation} ({gps_info_str})"
                     logger.info(f"Resolution verification on {model_name}: {verif.verdict} ({verif.confidence})")
                     return verif
             except Exception as e:
@@ -142,6 +233,6 @@ async def verify_repair_evidence(
     # Fallback when Gemini is unavailable
     return ResolutionVerification(
         verdict="unclear",
-        confidence=0.5,
-        explanation="Automated visual inspection service was unreachable. Remediation closeout logged pending manual audit.",
+        confidence=0.4,
+        explanation=f"Automated visual inspection service was unreachable ({gps_info_str}). Remediation closeout logged pending manual audit.",
     )

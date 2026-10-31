@@ -902,6 +902,13 @@ async def update_status(
     current_authority: Dict[str, Any] = Depends(require_authority),
 ):
     from sqlalchemy import select
+    clean_status = status.strip().lower()
+    if clean_status in ("resolved", "closed"):
+        raise HTTPException(
+            status_code=400,
+            detail="use /resolve with an after-photo",
+        )
+
     authority_email = current_authority.get("sub", "authority")
     official_actor = actor or f"Municipal Authority ({authority_email})"
 
@@ -911,11 +918,9 @@ async def update_status(
         if not report:
             raise HTTPException(404, "Report not found")
 
-        report.status = StatusEnum(status)
+        report.status = StatusEnum(clean_status)
         now = datetime.utcnow()
         report.updated_at = now
-        if status in [StatusEnum.resolved.value, StatusEnum.closed.value] and not report.resolved_at:
-            report.resolved_at = now
 
         if note:
             report.resolution_notes = note
@@ -923,14 +928,14 @@ async def update_status(
         await log_timeline(
             session=session,
             report_id=report_id,
-            status=status,
+            status=clean_status,
             actor=official_actor,
             action_type="status_update",
-            notes=note or f"Ticket status transitioned to {status.replace('_', ' ').title()}.",
+            notes=note or f"Ticket status transitioned to {clean_status.replace('_', ' ').title()}.",
         )
 
         await session.commit()
-        return {"message": "Status updated", "status": status}
+        return {"message": "Status updated", "status": clean_status}
 
 
 @app.post("/api/reports/{report_id}/resolve", response_model=ReportOut)
@@ -947,61 +952,71 @@ async def resolve_report_with_proof(
     authority_email = current_authority.get("sub", "authority")
     official_actor = actor or f"Municipal Authority ({authority_email})"
 
+    if not media or not media.filename:
+        raise HTTPException(
+            status_code=400,
+            detail="An after-photo is required to resolve a grievance. Please upload remediation completion evidence.",
+        )
+
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(Report).where(Report.id == report_id))
         report = result.scalar_one_or_none()
         if not report:
             raise HTTPException(404, "Report not found")
 
-        resolved_media_url = None
-        verification_result = None
-        if media and media.filename:
-            ext = Path(media.filename).suffix or ".jpg"
-            filename = f"resolved_{report_id}{ext}"
-            content = await media.read()
-            resolved_media_url = await save_media(filename, content, media.content_type)
-            report.resolved_media_url = resolved_media_url
+        ext = Path(media.filename).suffix or ".jpg"
+        filename = f"resolved_{report_id}{ext}"
+        content = await media.read()
+        resolved_media_url = await save_media(filename, content, media.content_type)
+        report.resolved_media_url = resolved_media_url
 
-            # Multimodal AI Resolution Verification
-            verification_result = await verify_repair_evidence(
-                original_media_url=report.media_url,
-                after_bytes=content,
-                after_mime=media.content_type or "image/jpeg",
-                title=report.title,
-                description=report.description,
-                resolution_notes=resolution_notes,
-                upload_dir=str(UPLOAD_DIR),
-            )
+        # Multimodal AI Resolution Verification with EXIF GPS cross-check
+        verification_result = await verify_repair_evidence(
+            original_media_url=report.media_url,
+            after_bytes=content,
+            after_mime=media.content_type or "image/jpeg",
+            title=report.title,
+            description=report.description,
+            resolution_notes=resolution_notes,
+            upload_dir=str(UPLOAD_DIR),
+            report_latitude=report.latitude,
+            report_longitude=report.longitude,
+        )
 
-            report.resolution_verdict = verification_result.verdict
-            report.resolution_confidence = verification_result.confidence
-            report.resolution_explanation = verification_result.explanation
+        report.resolution_verdict = verification_result.verdict
+        report.resolution_confidence = verification_result.confidence
+        report.resolution_explanation = verification_result.explanation
 
         now = datetime.utcnow()
         report.updated_at = now
         report.resolution_notes = resolution_notes
 
-        # If AI verification rejected closure, keep in_progress
-        if verification_result and verification_result.verdict in ("not_fixed", "different_location"):
+        # If verdict is unclear, not_fixed, or different_location: do NOT resolve
+        if verification_result.verdict in ("unclear", "not_fixed", "different_location"):
             report.status = StatusEnum.in_progress
+            timeline_note = (
+                "evidence inconclusive, resubmit a clearer photo"
+                if verification_result.verdict == "unclear"
+                else f"AI verification rejected closure ({verification_result.verdict.replace('_', ' ').title()}): {verification_result.explanation}"
+            )
             await log_timeline(
                 session=session,
                 report_id=report_id,
                 status=StatusEnum.in_progress.value,
                 actor="Jan Aawaz AI Inspector",
                 action_type="closure_rejected",
-                notes=f"AI verification rejected closure ({verification_result.verdict.replace('_', ' ').title()}): {verification_result.explanation}",
+                notes=timeline_note,
                 media_url=resolved_media_url,
             )
             await session.commit()
             await session.refresh(report)
             return report
 
-        # Approved resolution
+        # Approved resolution (fixed or partially_fixed)
         report.status = StatusEnum.resolved
         report.resolved_at = now
 
-        verdict_str = f" · AI Verdict: {verification_result.verdict.replace('_', ' ').title()}" if verification_result else ""
+        verdict_str = f" · AI Verdict: {verification_result.verdict.replace('_', ' ').title()}"
         await log_timeline(
             session=session,
             report_id=report_id,

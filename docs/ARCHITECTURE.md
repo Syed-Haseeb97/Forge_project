@@ -1,6 +1,6 @@
 # 🏛️ Jan Aawaz (जनAawaz) – Technical Architecture & Agent Specification
 
-Jan Aawaz is an autonomous civic grievance triage, dispatch, and public infrastructure monitoring system engineered for municipal governance, statutory accountability, and transparent citizen redressal.
+Jan Aawaz is an autonomous civic grievance triage, dispatch, and public infrastructure monitoring prototype engineered for municipal governance, verifiable SLAs, and transparent citizen redressal.
 
 ---
 
@@ -9,7 +9,7 @@ Jan Aawaz is an autonomous civic grievance triage, dispatch, and public infrastr
 The system is organized into four core architectural planes:
 1. **Civic Ingestion Plane**: Multimodal evidence capture (photos, voice notes, GPS coordinates, descriptions) with JWT-authenticated citizen credentials.
 2. **Autonomous Multi-Signal Agent Triage Plane**: 6-step agentic pipeline integrating Gemini Multimodal reasoning, Nominatim geocoding, Open-Meteo microclimate weather, Overpass sensitive sites (250m), and live DB recurrence correlation.
-3. **Municipal Dispatch & SLA Watchdog Plane**: Automated formal complaint work-order drafting via Gemini (English + regional language) and an asynchronous background watchdog worker managing tiered statutory escalations.
+3. **Municipal Dispatch & SLA Watchdog Plane**: Automated complaint work-order drafting via Gemini (English + regional language) and an asynchronous background watchdog worker managing tiered escalations.
 4. **Resolution Audit & Accountability Plane**: Computer-vision-based before/after verification rejecting false closures, citizen dispute reopening, and spatial 300m hotspot clustering.
 
 ```mermaid
@@ -156,13 +156,13 @@ To prevent fraudulent municipal closures where contractors mark tickets resolved
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Official as Municipal Authority
+    actor Authority as Municipal Authority
     participant API as POST /api/reports/{id}/resolve
     participant Vision as Gemini Vision AI Inspector
     participant DB as Database & Timeline
     actor Resident as Resident Citizen
 
-    Official->>API: Submit Resolution Proof (After-Photo + Notes)
+    Authority->>API: Submit Resolution Proof (After-Photo + Notes)
     API->>DB: Fetch Baseline Evidence Photo
     API->>Vision: Compare Before vs. After (Spatial, Hazard, Completion)
     Vision-->>API: {verdict, confidence, explanation}
@@ -170,11 +170,11 @@ sequenceDiagram
     alt Verdict is not_fixed OR different_location
         API->>DB: Reject Closure: Keep Status IN_PROGRESS
         API->>DB: Log "AI verification rejected closure: <explanation>"
-        API-->>Official: 200 OK (Status: in_progress, Verdict: rejected)
+        API-->>Authority: 200 OK (Status: in_progress, Verdict: rejected)
     else Verdict is fixed OR partially_fixed
         API->>DB: Approve Closure: Set Status RESOLVED
         API->>DB: Log "Issue resolved: <notes> · AI Verdict: Fixed"
-        API-->>Official: 200 OK (Status: resolved)
+        API-->>Authority: 200 OK (Status: resolved)
         
         opt Resident Verification
             Resident->>API: POST /api/reports/{id}/feedback

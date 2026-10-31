@@ -362,7 +362,7 @@ export default function ReportDetail() {
             <div className="bg-[#b04b37] text-white text-[10px] sm:text-[11px] font-bold tracking-[0.14em] uppercase px-5 py-2.5 flex items-center justify-between -mx-6 sm:-mx-9 -mt-6 sm:-mt-9 mb-6 shadow-md animate-pulse">
               <span className="flex items-center gap-2">
                 <AlertTriangle size={15} />
-                SLA DEADLINE EXCEEDED · ESCALATED TO COMMISSIONER & OMBUDSMAN (LEVEL {report.escalation_level || 3})
+                SLA DEADLINE EXCEEDED · ESCALATED TO CIVIC OVERSIGHT (LEVEL {report.escalation_level || 3})
               </span>
               <span className="bg-black/35 text-white font-mono text-[10px] px-2.5 py-0.5 rounded-full font-bold">
                 OVERDUE
@@ -383,7 +383,7 @@ export default function ReportDetail() {
             </div>
           )}
 
-          {/* Statutory Critical Alert Strip */}
+          {/* Critical Alert Strip */}
           {isCritical && (
             <div className="bg-[#b04b37] text-white text-[10px] sm:text-[11px] font-bold tracking-[0.14em] uppercase px-5 py-2 flex items-center justify-between -mx-6 sm:-mx-9 -mt-6 sm:-mt-9 mb-6 shadow-sm">
               <span className="flex items-center gap-2">
@@ -391,7 +391,7 @@ export default function ReportDetail() {
                   <span className="animate-ping absolute inline-flex size-full rounded-full bg-white opacity-85" />
                   <span className="relative inline-flex size-2 rounded-full bg-white" />
                 </span>
-                CRITICAL INFRASTRUCTURE HAZARD · STATUTORY PRIORITY 1
+                CRITICAL INFRASTRUCTURE HAZARD · TARGET PRIORITY 1
               </span>
               <span className="bg-black/25 text-white font-mono text-[10px] px-2.5 py-0.5 rounded font-bold uppercase">
                 {report.sla_hours ? `${report.sla_hours}H SLA DEADLINE` : 'IMMEDIATE SLA'}
@@ -494,7 +494,7 @@ export default function ReportDetail() {
               <span className="mt-1 font-semibold text-[#0d3035] dark:text-[#f6f4ee] truncate block">{report.routed_to || 'Public Works'}</span>
             </div>
             <div>
-              <span className="block text-[10px] font-bold uppercase tracking-wider text-[#8a9b98]">STATUTORY SLA</span>
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-[#8a9b98]">TARGET SLA</span>
               <span className="mt-1 font-semibold text-[#0d3035] dark:text-[#f6f4ee] block">{report.sla_hours ? `${report.sla_hours} Hours` : 'N/A'}</span>
             </div>
             <div>
@@ -591,7 +591,7 @@ export default function ReportDetail() {
                 </p>
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
                   <span>Language: <strong className="text-slate-700 dark:text-slate-300">{SUPPORTED_LANGS.find(l => l.code === selectedLang)?.native}</strong></span>
-                  <span className="text-[10px] font-mono text-teal-700 dark:text-teal-400">Verified Jan Aawaz Ombudsman Brief</span>
+                  <span className="text-[10px] font-mono text-teal-700 dark:text-teal-400">Verified Jan Aawaz Docket Brief</span>
                 </div>
               </div>
             ) : (
@@ -785,7 +785,7 @@ export default function ReportDetail() {
           </div>
         )}
 
-        {/* Official Dispatch Letter Card */}
+        {/* Dispatch Work Order Card */}
         {dispatches && dispatches.length > 0 && (
           <div className="rounded-[26px] border border-[#173e42]/15 dark:border-white/10 bg-white dark:bg-[#0b2529] p-6 sm:p-8 space-y-4 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#173e42]/10 dark:border-white/10 pb-4">
@@ -803,7 +803,7 @@ export default function ReportDetail() {
                     </span>
                   </div>
                   <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#0d3035] dark:text-[#f6f4ee]">
-                    Official Municipal Dispatch Letter
+                    Prototype Dispatch Work Order
                   </h2>
                 </div>
               </div>
@@ -847,7 +847,7 @@ export default function ReportDetail() {
                   VERIFIED CLOSEOUT AUDIT
                 </p>
                 <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#0d3035] dark:text-[#f6f4ee]">
-                  Official Engineering Remediation Proof
+                  Remediation Closeout Proof
                 </h2>
               </div>
               {report.resolved_at && (
@@ -888,7 +888,7 @@ export default function ReportDetail() {
             {report.resolution_notes && (
               <div className="rounded-xl border border-[#347161]/20 bg-white dark:bg-[#0b2529] p-4 text-xs sm:text-sm">
                 <span className="block text-[10px] font-bold uppercase tracking-wider text-[#347161] dark:text-[#70b99e] mb-1">
-                  OFFICIAL CLOSEOUT REPORT
+                  REMEDIATION CLOSEOUT REPORT
                 </span>
                 <p className="text-[#324b49] dark:text-[#b8d4cf] leading-relaxed">
                   {report.resolution_notes}
@@ -971,7 +971,7 @@ export default function ReportDetail() {
             <div className="flex items-center gap-2">
               <CivicIcon name="clock" size={18} className="text-[#347161]" />
               <h2 className="font-serif text-xl font-bold text-[#0d3035] dark:text-[#f6f4ee]">
-                Statutory Lifecycle & Audit Trail
+                Incident Lifecycle & Audit Trail
               </h2>
             </div>
 
@@ -1148,7 +1148,7 @@ export default function ReportDetail() {
         <div className="rounded-[26px] border border-[#173e42]/12 dark:border-[#173e42]/30 bg-white dark:bg-[#0b2529] p-6 sm:p-8 space-y-4 shadow-sm">
           <div className="flex items-center justify-between">
             <h2 className="font-serif text-xl font-bold text-[#0d3035] dark:text-[#f6f4ee]">
-              Public Inquiry & Official Discourse
+              Public Inquiry & Discussion
             </h2>
             <span className="font-mono text-xs text-[#718481]">
               {comments.length} {comments.length === 1 ? 'record' : 'records'}

@@ -289,7 +289,7 @@ export default function SubmitReport() {
               Triaging your report
             </h2>
             <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[#5f716e] dark:text-[#95a9a6]">
-              Extracting multimodal evidence, diagnosing hazard severity, setting statutory SLA limits, and routing to the municipal engineering authority.
+              Extracting multimodal evidence, diagnosing hazard severity, setting target SLA response limits, and routing to the responsible engineering department.
             </p>
 
             <div className="mx-auto mt-8 max-w-xs space-y-3.5 text-left">
@@ -335,7 +335,7 @@ export default function SubmitReport() {
                     </span>
                   </div>
                   <p className="mt-2 text-xs sm:text-sm text-[#5f716e] dark:text-[#95a9a6]">
-                    Provide details or evidence. AI assesses urgency and assigns statutory resolution deadlines.
+                    Provide details or evidence. AI assesses urgency and assigns target resolution deadlines.
                   </p>
                 </div>
                 <span className="self-start sm:self-auto rounded-full bg-[#edf2ef] dark:bg-[#153439] px-3.5 py-1.5 text-[10px] font-bold tracking-wider text-[#436461] dark:text-[#95b0ac]">

@@ -255,7 +255,7 @@ export default function CivicMap({
                     to={`/reports/${r.id}`}
                     className="block text-center text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white dark:bg-sky-600 dark:hover:bg-sky-500 py-1.5 px-2 rounded transition-colors"
                   >
-                    View Official Docket
+                    View Incident Docket
                   </Link>
                 </div>
               </Popup>

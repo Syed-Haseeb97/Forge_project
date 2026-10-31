@@ -125,7 +125,7 @@ def _build_fallback_explanation(report_data: Dict[str, Any], lang: str) -> str:
             f"Hello. Your grievance regarding '{title}' (Docket: {docket}) has been logged and triaged. "
             f"1. What was found: A civic infrastructure issue categorized under '{report_data.get('category', 'civic fault')}' was identified with severity '{report_data.get('severity', 'medium')}'. "
             f"2. What happens next: The incident has been dispatched to {dept}. An engineering inspection team will be assigned to execute on-site remediation. "
-            f"3. Target Deadline: Under official municipal citizen charter guidelines, the SLA resolution turnaround is {sla} hours. "
+            f"3. Target Deadline: Under standard civic resolution SLA guidelines, the resolution turnaround is {sla} hours. "
             f"4. Safety Advice: {safety} "
             f"5. Escalation: If unresolved by the target deadline, our autonomous watchdog will automatically escalate this docket to the Department Head and Municipal Commissioner."
         )
@@ -152,7 +152,7 @@ async def generate_plain_language_explanation(report_data: Dict[str, Any], lang:
     status = report_data.get("status", "open")
 
     system_instruction = (
-        "You are an empathetic, clear, citizen-first civic ombudsman and communication assistant for Jan Aawaz. "
+        "You are an empathetic, clear, citizen-first civic communication assistant for Jan Aawaz. "
         "Your task is to write a plain-language explanation of a civic grievance for ordinary residents. "
         "Write completely and naturally in the requested language. Do NOT use confusing legalistic jargon. "
         "Clearly cover these 5 core questions in friendly, numbered or cleanly structured paragraphs:\n"

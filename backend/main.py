@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Response, Depends
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Response, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -21,9 +21,17 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from database import engine, AsyncSessionLocal, Base
-from models import Report, ReportTimeline, Comment, Citizen, StatusEnum, SeverityEnum
+from models import Report, ReportTimeline, Comment, Citizen, Dispatch, StatusEnum, SeverityEnum
 from gemini_service import analyze_report, ROUTING_MAP
 from storage_service import save_media, UPLOAD_DIR
+from agent.dispatch import draft_and_send_dispatch
+from agent.watchdog import (
+    start_watchdog_background_task,
+    stop_watchdog_background_task,
+    run_watchdog_check,
+    get_sla_time_scale,
+)
+from agent.verification import verify_repair_evidence
 from email_service import (
     generate_and_store_otp,
     verify_otp_code,
@@ -73,6 +81,12 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 @app.on_event("startup")
 async def startup():
     await ensure_schema()
+    start_watchdog_background_task()
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    stop_watchdog_background_task()
 
 
 @app.get("/api/health")
@@ -119,11 +133,37 @@ class ReportOut(BaseModel):
     severity_rationale: Optional[str] = None
     detected_language: Optional[str] = None
     locality: Optional[str] = None
+    escalation_level: Optional[int] = 0
+    is_overdue: Optional[bool] = False
+    resolution_verdict: Optional[str] = None
+    resolution_confidence: Optional[float] = None
+    resolution_explanation: Optional[str] = None
+    citizen_feedback: Optional[str] = None
+    feedback_notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class DispatchOut(BaseModel):
+    id: str
+    report_id: str
+    kind: str
+    to_email: str
+    subject: str
+    body: str
+    sent: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackRequest(BaseModel):
+    feedback: str  # "confirmed" | "disputed"
+    notes: Optional[str] = None
 
 
 class TimelineOut(BaseModel):
@@ -157,6 +197,8 @@ class StatsOut(BaseModel):
     critical_active: int
     avg_resolution_hours: float
     sla_compliance_rate: float
+    sla_time_scale: float = 1.0
+    overdue: int = 0
     by_category: Dict[str, int]
     by_department: Dict[str, int]
 
@@ -482,6 +524,7 @@ async def send_auth_code(payload: LoginSendCodeRequest):
 # ── Core Routes ────────────────────────────────────────────────────────────────
 @app.post("/api/reports", response_model=ReportOut)
 async def submit_report(
+    background_tasks: BackgroundTasks,
     title: str = Form(...),
     description: str = Form(...),
     category: str = Form(...),
@@ -596,6 +639,10 @@ async def submit_report(
 
         await session.commit()
         await session.refresh(report)
+
+        # Schedule autonomous dispatch drafting & transmission in the background
+        background_tasks.add_task(draft_and_send_dispatch, report_id, "initial")
+
         return report
 
 
@@ -833,6 +880,7 @@ async def resolve_report_with_proof(
             raise HTTPException(404, "Report not found")
 
         resolved_media_url = None
+        verification_result = None
         if media and media.filename:
             ext = Path(media.filename).suffix or ".jpg"
             filename = f"resolved_{report_id}{ext}"
@@ -840,19 +888,53 @@ async def resolve_report_with_proof(
             resolved_media_url = await save_media(filename, content, media.content_type)
             report.resolved_media_url = resolved_media_url
 
-        report.status = StatusEnum(status)
-        report.resolution_notes = resolution_notes
-        now = datetime.utcnow()
-        report.resolved_at = now
-        report.updated_at = now
+            # Multimodal AI Resolution Verification
+            verification_result = await verify_repair_evidence(
+                original_media_url=report.media_url,
+                after_bytes=content,
+                after_mime=media.content_type or "image/jpeg",
+                title=report.title,
+                description=report.description,
+                resolution_notes=resolution_notes,
+                upload_dir=str(UPLOAD_DIR),
+            )
 
+            report.resolution_verdict = verification_result.verdict
+            report.resolution_confidence = verification_result.confidence
+            report.resolution_explanation = verification_result.explanation
+
+        now = datetime.utcnow()
+        report.updated_at = now
+        report.resolution_notes = resolution_notes
+
+        # If AI verification rejected closure, keep in_progress
+        if verification_result and verification_result.verdict in ("not_fixed", "different_location"):
+            report.status = StatusEnum.in_progress
+            await log_timeline(
+                session=session,
+                report_id=report_id,
+                status=StatusEnum.in_progress.value,
+                actor="Jan Aawaz AI Inspector",
+                action_type="closure_rejected",
+                notes=f"AI verification rejected closure ({verification_result.verdict.replace('_', ' ').title()}): {verification_result.explanation}",
+                media_url=resolved_media_url,
+            )
+            await session.commit()
+            await session.refresh(report)
+            return report
+
+        # Approved resolution
+        report.status = StatusEnum.resolved
+        report.resolved_at = now
+
+        verdict_str = f" · AI Verdict: {verification_result.verdict.replace('_', ' ').title()}" if verification_result else ""
         await log_timeline(
             session=session,
             report_id=report_id,
-            status=status,
+            status=StatusEnum.resolved.value,
             actor=official_actor,
             action_type="resolution_proof",
-            notes=f"Issue resolved: {resolution_notes}",
+            notes=f"Issue resolved: {resolution_notes}{verdict_str}",
             media_url=resolved_media_url,
         )
 
@@ -876,6 +958,74 @@ async def upvote_report(
         report.updated_at = datetime.utcnow()
         await session.commit()
         return {"upvotes": report.upvotes}
+
+
+@app.get("/api/reports/{report_id}/dispatches", response_model=List[DispatchOut])
+async def list_report_dispatches(report_id: str):
+    """Fetch formal dispatch letters and escalation transmissions for a docket."""
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(
+            select(Dispatch).where(Dispatch.report_id == report_id).order_by(Dispatch.created_at.desc())
+        )
+        return res.scalars().all()
+
+
+@app.post("/api/reports/{report_id}/feedback", response_model=ReportOut)
+async def submit_citizen_feedback(
+    report_id: str,
+    payload: FeedbackRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Citizen confirms or disputes ticket resolution."""
+    citizen_email = current_user.get("sub", "citizen")
+    fb = payload.feedback.lower().strip()
+    if fb not in ("confirmed", "disputed"):
+        raise HTTPException(400, "Feedback must be 'confirmed' or 'disputed'")
+
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(select(Report).where(Report.id == report_id))
+        report = res.scalar_one_or_none()
+        if not report:
+            raise HTTPException(404, "Report not found")
+
+        report.citizen_feedback = fb
+        report.feedback_notes = payload.notes
+        now = datetime.utcnow()
+        report.updated_at = now
+
+        if fb == "disputed":
+            report.status = StatusEnum.in_progress
+            report.resolved_at = None
+            await log_timeline(
+                session=session,
+                report_id=report_id,
+                status=StatusEnum.in_progress.value,
+                actor=f"Citizen ({citizen_email})",
+                action_type="citizen_disputed",
+                notes=f"Citizen disputed resolution: {payload.notes or 'Reported issue persists on ground.'}",
+            )
+        else:
+            await log_timeline(
+                session=session,
+                report_id=report_id,
+                status=report.status.value,
+                actor=f"Citizen ({citizen_email})",
+                action_type="citizen_confirmed",
+                notes=f"Citizen confirmed resolution: {payload.notes or 'Work completed satisfactorily.'}",
+            )
+
+        await session.commit()
+        await session.refresh(report)
+        return report
+
+
+@app.post("/api/admin/watchdog/run")
+async def trigger_watchdog_run(
+    current_authority: Dict[str, Any] = Depends(require_authority),
+):
+    """Authority trigger to immediately evaluate active dockets against SLA limits."""
+    res = await run_watchdog_check()
+    return res
 
 
 @app.get("/api/stats", response_model=StatsOut)
@@ -910,6 +1060,10 @@ async def get_stats():
             1 for r in all_reports
             if r.severity == SeverityEnum.critical and r.status in [StatusEnum.open, StatusEnum.in_progress]
         )
+        overdue_count = sum(
+            1 for r in all_reports
+            if (getattr(r, "is_overdue", False) or getattr(r, "escalation_level", 0) >= 3) and r.status in [StatusEnum.open, StatusEnum.in_progress]
+        )
 
         return StatsOut(
             total=len(all_reports),
@@ -924,6 +1078,8 @@ async def get_stats():
             critical_active=critical_active,
             avg_resolution_hours=avg_res_hours,
             sla_compliance_rate=sla_rate,
+            sla_time_scale=get_sla_time_scale(),
+            overdue=overdue_count,
             by_category=by_cat,
             by_department=by_dept,
         )

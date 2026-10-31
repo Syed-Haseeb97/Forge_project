@@ -104,3 +104,36 @@ class TraceStep(BaseModel):
     duration_ms: int
     summary: str
     data: Optional[Dict[str, Any]] = None
+
+
+class DispatchDraft(BaseModel):
+    subject: str = Field(
+        ...,
+        description="Formal bureaucratic subject line with docket ID, locality, and priority"
+    )
+    body_english: str = Field(
+        ...,
+        description="Formal official dispatch letter in English detailing the incident, coordinates, hazards, SLA deadline, and required departmental work order"
+    )
+    body_regional: Optional[str] = Field(
+        default=None,
+        description="Full formal letter translation in the citizen's detected language if not English, otherwise null"
+    )
+
+
+class ResolutionVerification(BaseModel):
+    verdict: Literal["fixed", "partially_fixed", "not_fixed", "different_location", "unclear"] = Field(
+        ...,
+        description="Visual verification verdict comparing before vs after repair images"
+    )
+    confidence: float = Field(
+        default=0.85,
+        ge=0.0,
+        le=1.0,
+        description="Confidence rating of repair verification"
+    )
+    explanation: str = Field(
+        ...,
+        description="Detailed visual comparison explaining whether the physical defect was remediated, unchanged, or taken at a different angle/location"
+    )
+

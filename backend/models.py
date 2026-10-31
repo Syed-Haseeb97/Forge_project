@@ -65,6 +65,16 @@ class Report(Base):
     severity_rationale = Column(Text, nullable=True)
     detected_language = Column(String(50), nullable=True)
     locality = Column(String(200), nullable=True)
+    # SLA Watchdog & Escalation
+    escalation_level = Column(Integer, default=0)
+    is_overdue = Column(Boolean, default=False)
+    # AI Resolution Verification
+    resolution_verdict = Column(String(50), nullable=True)
+    resolution_confidence = Column(Float, nullable=True)
+    resolution_explanation = Column(Text, nullable=True)
+    # Citizen Verification / Feedback
+    citizen_feedback = Column(String(50), nullable=True)
+    feedback_notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -91,3 +101,17 @@ class Comment(Base):
     role = Column(String(50), nullable=False, default="citizen")  # "citizen" | "authority"
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Dispatch(Base):
+    __tablename__ = "dispatches"
+
+    id = Column(String(36), primary_key=True)
+    report_id = Column(String(36), ForeignKey("reports.id", ondelete="CASCADE"), nullable=False, index=True)
+    kind = Column(String(20), nullable=False, default="initial")  # initial | escalation
+    to_email = Column(String(255), nullable=False)
+    subject = Column(String(300), nullable=False)
+    body = Column(Text, nullable=False)
+    sent = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+

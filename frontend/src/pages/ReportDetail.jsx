@@ -2,7 +2,22 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import axios from 'axios'
 import toast from 'react-hot-toast'
-import { Star, ThumbsUp, Send, ChevronDown, ChevronUp, Cpu, Sparkles } from 'lucide-react'
+import {
+  Star,
+  ThumbsUp,
+  Send,
+  ChevronDown,
+  ChevronUp,
+  Cpu,
+  Sparkles,
+  Copy,
+  Check,
+  AlertTriangle,
+  Clock,
+  Mail,
+  CheckCircle2,
+  XCircle,
+} from 'lucide-react'
 import CivicIcon from '../components/CivicIcon'
 import { isWatched, toggleWatchlist } from '../components/constants'
 import CivicMap from '../components/CivicMap'
@@ -16,10 +31,13 @@ export default function ReportDetail() {
   const { user, isAuthority } = useAuth()
   const [report, setReport] = useState(null)
   const [timeline, setTimeline] = useState([])
+  const [dispatches, setDispatches] = useState([])
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
   const [comments, setComments] = useState([])
   const [showTrace, setShowTrace] = useState(true)
+  const [copiedDispatch, setCopiedDispatch] = useState(false)
+  const [submittingFeedback, setSubmittingFeedback] = useState(false)
   const [commentForm, setCommentForm] = useState({
     author: user?.name || '',
     role: isAuthority ? 'authority' : 'citizen',
@@ -38,14 +56,16 @@ export default function ReportDetail() {
 
   const loadData = async () => {
     try {
-      const [rRes, tRes, cRes] = await Promise.all([
+      const [rRes, tRes, cRes, dRes] = await Promise.all([
         axios.get(`/api/reports/${id}`),
         axios.get(`/api/reports/${id}/timeline`).catch(() => ({ data: [] })),
         axios.get(`/api/reports/${id}/comments`).catch(() => ({ data: [] })),
+        axios.get(`/api/reports/${id}/dispatches`).catch(() => ({ data: [] })),
       ])
       setReport(rRes.data)
       setTimeline(tRes.data)
       setComments(cRes.data)
+      setDispatches(dRes.data)
       setWatched(isWatched(rRes.data.id))
     } catch {
       toast.error('Failed to load incident record')
@@ -73,6 +93,42 @@ export default function ReportDetail() {
     const isNow = updated.includes(report.id)
     setWatched(isNow)
     toast.success(isNow ? 'Added to Monitored Registry' : 'Removed from Monitored Registry')
+  }
+
+  const handleCopyDispatch = (text) => {
+    if (!text) return
+    navigator.clipboard.writeText(text)
+    setCopiedDispatch(true)
+    toast.success('Dispatch letter copied to clipboard', { icon: '📋' })
+    setTimeout(() => setCopiedDispatch(false), 2500)
+  }
+
+  const handleFeedback = async (feedbackType) => {
+    const note = feedbackType === 'disputed'
+      ? window.prompt('Please state why this grievance remains unresolved on the ground:')
+      : 'Resolution verified on-site by resident.'
+    if (feedbackType === 'disputed' && note === null) return
+
+    setSubmittingFeedback(true)
+    try {
+      const { data } = await axios.post(`/api/reports/${id}/feedback`, {
+        feedback: feedbackType,
+        notes: note || undefined,
+      })
+      setReport(data)
+      const tRes = await axios.get(`/api/reports/${id}/timeline`)
+      setTimeline(tRes.data)
+      toast.success(
+        feedbackType === 'disputed'
+          ? 'Dispute lodged. Docket returned to active engineering status.'
+          : 'Thank you for confirming the municipal resolution!',
+        { icon: feedbackType === 'disputed' ? '⚠️' : '✅' }
+      )
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Feedback submission failed')
+    } finally {
+      setSubmittingFeedback(false)
+    }
   }
 
   const handleStatusChange = async (status) => {
@@ -229,6 +285,32 @@ export default function ReportDetail() {
               : 'bg-white dark:bg-[#0b2529] border-[#173e42]/12 dark:border-[#173e42]/30'
           }`}
         >
+          {/* SLA Watchdog Overdue Alert */}
+          {report.is_overdue && (
+            <div className="bg-[#b04b37] text-white text-[10px] sm:text-[11px] font-bold tracking-[0.14em] uppercase px-5 py-2.5 flex items-center justify-between -mx-6 sm:-mx-9 -mt-6 sm:-mt-9 mb-6 shadow-md animate-pulse">
+              <span className="flex items-center gap-2">
+                <AlertTriangle size={15} />
+                SLA DEADLINE EXCEEDED · ESCALATED TO COMMISSIONER & OMBUDSMAN (LEVEL {report.escalation_level || 3})
+              </span>
+              <span className="bg-black/35 text-white font-mono text-[10px] px-2.5 py-0.5 rounded-full font-bold">
+                OVERDUE
+              </span>
+            </div>
+          )}
+
+          {/* SLA Watchdog Tiered Escalation Notice */}
+          {!report.is_overdue && report.escalation_level > 0 && (
+            <div className="bg-[#ba7c29] text-white text-[10px] sm:text-[11px] font-bold tracking-[0.14em] uppercase px-5 py-2 flex items-center justify-between -mx-6 sm:-mx-9 -mt-6 sm:-mt-9 mb-6 shadow-sm">
+              <span className="flex items-center gap-2">
+                <Clock size={14} />
+                SLA WATCHDOG ACTIVE · ESCALATION LEVEL {report.escalation_level} (REMINDER DISPATCHED)
+              </span>
+              <span className="bg-black/25 text-white font-mono text-[10px] px-2.5 py-0.5 rounded-full font-bold">
+                LEVEL {report.escalation_level}
+              </span>
+            </div>
+          )}
+
           {/* Statutory Critical Alert Strip */}
           {isCritical && (
             <div className="bg-[#b04b37] text-white text-[10px] sm:text-[11px] font-bold tracking-[0.14em] uppercase px-5 py-2 flex items-center justify-between -mx-6 sm:-mx-9 -mt-6 sm:-mt-9 mb-6 shadow-sm">
@@ -537,8 +619,58 @@ export default function ReportDetail() {
           </div>
         )}
 
+        {/* Official Dispatch Letter Card */}
+        {dispatches && dispatches.length > 0 && (
+          <div className="rounded-[26px] border border-[#173e42]/15 dark:border-white/10 bg-white dark:bg-[#0b2529] p-6 sm:p-8 space-y-4 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#173e42]/10 dark:border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-[#0d3035] text-[#e8b855]">
+                  <Mail size={20} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[10px] font-bold tracking-[0.16em] uppercase text-[#ba7c29]">
+                      DEPARTMENTAL DISPATCH TRANSMISSION
+                    </p>
+                    <span className="rounded-full bg-[#e3f0ea] dark:bg-[#123830] px-2 py-0.5 text-[10px] font-bold text-[#2f7661] dark:text-[#70b99e]">
+                      {dispatches.length} {dispatches.length === 1 ? 'Notice' : 'Notices'} Transmitted
+                    </span>
+                  </div>
+                  <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+                    Official Municipal Dispatch Letter
+                  </h2>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleCopyDispatch(dispatches[0].body)}
+                  className="flex items-center gap-1.5 rounded-full border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] px-4 py-2 text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee] hover:bg-[#ba7c29] hover:text-white transition shadow-xs"
+                >
+                  {copiedDispatch ? <Check size={14} className="text-[#347161]" /> : <Copy size={14} />}
+                  <span>{copiedDispatch ? 'Copied to Clipboard' : 'Copy Dispatch Letter'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Note on transmission destination */}
+            <p className="text-xs text-[#6e807e] dark:text-[#95a9a6]">
+              Sent to the configured dispatch inbox (<strong className="font-mono text-[#0d3035] dark:text-[#e8b855]">{dispatches[0].to_email}</strong>) on {new Date(dispatches[0].created_at).toLocaleString()}.
+            </p>
+
+            {/* Latest Dispatch Letter Presentation */}
+            <div className="rounded-xl border border-[#173e42]/10 dark:border-white/10 bg-[#f8f8f4] dark:bg-[#06181b] p-4 font-mono text-xs leading-relaxed text-[#354f4d] dark:text-[#a0b8b5] whitespace-pre-wrap max-h-80 overflow-y-auto">
+              <div className="pb-3 mb-3 border-b border-[#173e42]/10 dark:border-white/10 font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+                SUBJECT: {dispatches[0].subject}
+              </div>
+              {dispatches[0].body}
+            </div>
+          </div>
+        )}
+
         {/* Verified Resolution Proof (Pre vs Post Remediation Comparison) */}
-        {(report.resolved_media_url || report.resolution_notes) && (
+        {(report.resolved_media_url || report.resolution_notes || report.resolution_verdict) && (
           <div className="rounded-[26px] border border-[#347161]/30 bg-[#f0f7f3] dark:bg-[#0d2621] p-6 sm:p-8 space-y-4">
             <div className="flex items-center gap-3">
               <div className="flex size-10 items-center justify-center rounded-xl bg-[#347161] text-white">
@@ -559,6 +691,34 @@ export default function ReportDetail() {
               )}
             </div>
 
+            {/* AI Verification Verdict Banner */}
+            {report.resolution_verdict && (
+              <div className={`rounded-xl p-4 text-xs space-y-1.5 border ${
+                report.resolution_verdict === 'fixed'
+                  ? 'bg-[#e7f5ee] dark:bg-[#102b23] border-[#347161]/30 text-[#1b5042] dark:text-[#82c9b6]'
+                  : report.resolution_verdict === 'partially_fixed'
+                  ? 'bg-[#fff5e5] dark:bg-[#2b1f0e] border-[#ba7c29]/30 text-[#855513] dark:text-[#e2b77d]'
+                  : report.resolution_verdict === 'unclear'
+                  ? 'bg-[#f0f4f5] dark:bg-[#122328] border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                  : 'bg-[#fff0ed] dark:bg-[#2b1210] border-[#b04b37]/30 text-[#8a2a19] dark:text-[#f59e90]'
+              }`}>
+                <div className="flex items-center justify-between font-bold text-xs">
+                  <span className="flex items-center gap-2 uppercase tracking-wider text-[11px]">
+                    <Sparkles size={14} />
+                    AI RESOLUTION AUDIT VERDICT: {report.resolution_verdict.replace('_', ' ').toUpperCase()}
+                  </span>
+                  {report.resolution_confidence && (
+                    <span className="font-mono text-[10px]">
+                      {Math.round(report.resolution_confidence * 100)}% Confidence
+                    </span>
+                  )}
+                </div>
+                <p className="leading-relaxed">
+                  {report.resolution_explanation}
+                </p>
+              </div>
+            )}
+
             {report.resolution_notes && (
               <div className="rounded-xl border border-[#347161]/20 bg-white dark:bg-[#0b2529] p-4 text-xs sm:text-sm">
                 <span className="block text-[10px] font-bold uppercase tracking-wider text-[#347161] dark:text-[#70b99e] mb-1">
@@ -575,18 +735,67 @@ export default function ReportDetail() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="rounded-xl overflow-hidden border border-[#173e42]/15 bg-white dark:bg-[#0b2529]">
                   <span className="block px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-[#f8f8f4] dark:bg-[#06181b] text-[#70817e] border-b border-[#173e42]/10">
-                    PRE-REMEDIATION EVIDENCE
+                    PRE-REMEDIATION BASELINE (BEFORE)
                   </span>
-                  <img src={report.media_url} alt="Pre-remediation" className="h-44 w-full object-cover" />
+                  <img src={report.media_url} alt="Pre-remediation baseline" className="h-44 w-full object-cover" />
                 </div>
                 <div className="rounded-xl overflow-hidden border border-[#347161]/30 bg-white dark:bg-[#0b2529]">
                   <span className="block px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-[#e3f0ea] dark:bg-[#123830] text-[#2f7661] dark:text-[#70b99e] border-b border-[#347161]/20">
-                    POST-REMEDIATION VERIFICATION
+                    POST-REMEDIATION VERIFICATION (AFTER)
                   </span>
-                  <img src={report.resolved_media_url} alt="Post-remediation" className="h-44 w-full object-cover" />
+                  <img src={report.resolved_media_url} alt="Post-remediation proof" className="h-44 w-full object-cover" />
                 </div>
               </div>
             )}
+
+            {/* Citizen Resolution Feedback */}
+            <div className="rounded-xl border border-[#173e42]/10 dark:border-white/10 bg-[#f8f8f4] dark:bg-[#06181b] p-4 text-xs space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <span className="font-bold uppercase tracking-wider text-[10px] text-[#ba7c29] block">
+                    RESIDENT ON-SITE VERIFICATION
+                  </span>
+                  <p className="text-[#556b68] dark:text-[#95a9a6] mt-0.5">
+                    Have you observed the completed repairs at this location?
+                  </p>
+                </div>
+
+                {report.citizen_feedback ? (
+                  <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider inline-flex items-center gap-1.5 ${
+                    report.citizen_feedback === 'confirmed'
+                      ? 'bg-[#e3f0ea] dark:bg-[#123830] text-[#2f7661] dark:text-[#70b99e]'
+                      : 'bg-[#ffebe8] dark:bg-red-950/60 text-[#b04b37]'
+                  }`}>
+                    {report.citizen_feedback === 'confirmed' ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
+                    <span>Resident Feedback: {report.citizen_feedback}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={submittingFeedback}
+                      onClick={() => handleFeedback('confirmed')}
+                      className="px-3.5 py-1.5 rounded-full bg-[#347161] hover:bg-[#2b5e50] text-white font-bold text-xs transition disabled:opacity-50"
+                    >
+                      Confirm Fixed
+                    </button>
+                    <button
+                      type="button"
+                      disabled={submittingFeedback}
+                      onClick={() => handleFeedback('disputed')}
+                      className="px-3.5 py-1.5 rounded-full border border-[#b04b37]/30 text-[#b04b37] hover:bg-[#ffebe8] font-bold text-xs transition disabled:opacity-50"
+                    >
+                      Dispute (Reopen)
+                    </button>
+                  </div>
+                )}
+              </div>
+              {report.feedback_notes && (
+                <p className="italic text-[11px] text-[#6d807e] dark:text-[#8ea5a2] border-t border-[#173e42]/10 dark:border-white/10 pt-2">
+                  Resident feedback notes: “{report.feedback_notes}”
+                </p>
+              )}
+            </div>
           </div>
         )}
 

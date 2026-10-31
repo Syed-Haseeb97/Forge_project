@@ -169,3 +169,46 @@ def send_verification_email(to_email: str, code: str, title: str = "Verify your 
     except Exception as e:
         print(f"[EmailService Error] Failed to send verification email to {to_email}: {e}")
         return False
+
+
+def send_dispatch_email(to_email: str, subject: str, body_text: str) -> bool:
+    """Send formal departmental dispatch or escalation notice."""
+    if not GMAIL_USER or not GMAIL_APP_PASSWORD:
+        print(f"[EmailService] Dispatch email skipped: SMTP credentials not set. Notice recorded in database.")
+        return False
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = EMAIL_FROM or f"Jan Aawaz Dispatch Office <{GMAIL_USER}>"
+        msg["To"] = to_email
+
+        html_content = f"""<!DOCTYPE html>
+<html>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f6f4ee; padding: 24px; color: #102a2f;">
+  <div style="max-width: 650px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid rgba(23,62,66,0.15); overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.05);">
+    <div style="background-color: #0d3035; padding: 20px 28px; color: #ffffff;">
+      <h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #e8b855;">Jan Aawaz (जनAawaz) Official Dispatch Notice</h2>
+      <p style="margin: 4px 0 0 0; font-size: 11px; opacity: 0.8; letter-spacing: 0.1em; text-transform: uppercase;">MUNICIPAL INFRASTRUCTURE & CIVIC REDRESSAL</p>
+    </div>
+    <div style="padding: 28px; font-size: 13px; line-height: 1.7; color: #334e4c; white-space: pre-wrap;">
+{body_text}
+    </div>
+    <div style="background-color: #08272b; padding: 14px 28px; text-align: center; color: rgba(255,255,255,0.4); font-size: 10px;">
+      Sent to configured dispatch inbox · Jan Aawaz Autonomous Governance Infrastructure
+    </div>
+  </div>
+</body>
+</html>"""
+
+        msg.attach(MIMEText(body_text, "plain"))
+        msg.attach(MIMEText(html_content, "html"))
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=6) as server:
+            server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+            server.send_message(msg)
+
+        return True
+    except Exception as e:
+        print(f"[EmailService Error] Failed to send dispatch email to {to_email}: {e}")
+        return False

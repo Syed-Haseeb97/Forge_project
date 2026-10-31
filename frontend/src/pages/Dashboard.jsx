@@ -105,6 +105,24 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-16 lg:space-y-24">
+      {/* Demo Time Compression Banner */}
+      {stats?.sla_time_scale && stats.sla_time_scale !== 1 && (
+        <div className="mx-auto max-w-[1240px] pt-4 px-4 sm:px-6">
+          <div className="bg-gradient-to-r from-[#ba7c29] to-[#d99738] text-white py-2.5 px-4 sm:px-6 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-2 text-xs font-bold shadow-md">
+            <div className="flex items-center gap-2.5">
+              <span className="relative flex size-2.5">
+                <span className="animate-ping absolute inline-flex size-full rounded-full bg-white opacity-85" />
+                <span className="relative inline-flex size-2.5 rounded-full bg-white" />
+              </span>
+              <span>DEMO TIME COMPRESSION ACTIVE: x{stats.sla_time_scale} ACCELERATION</span>
+            </div>
+            <span className="text-[10px] font-mono bg-black/20 px-2.5 py-0.5 rounded-full text-white/90">
+              SLA Watchdog Background Agent Running
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Hero Section */}
       <section className="relative overflow-hidden pt-4 pb-12 sm:pt-10 sm:pb-16">
         <div className="civic-grid absolute inset-0 opacity-40 pointer-events-none" />

@@ -87,7 +87,7 @@ async def draft_and_send_dispatch(
             elif escalation_level == 2:
                 recipient_office = "Office of the Municipal Commissioner"
             elif escalation_level >= 3:
-                recipient_office = "Public Grievance Redressal Ombudsman & Vigilance Cell"
+                recipient_office = "Civic Oversight & Escalations Desk"
 
             language = report.detected_language or "English"
             needs_regional = language.strip().lower() not in ["english", "en"]
@@ -96,7 +96,7 @@ async def draft_and_send_dispatch(
 
             if client:
                 prompt = (
-                    f"You are the Jan Aawaz Chief Dispatcher drafting a formal government grievance transmission.\n"
+                    f"You are the Jan Aawaz Chief Dispatcher drafting a civic grievance transmission work order.\n"
                     f"Draft a formal complaint letter addressed to {recipient_office}.\n\n"
                     f"DOCKET DETAILS:\n"
                     f"- Docket Reference: {docket_id}\n"
@@ -105,7 +105,7 @@ async def draft_and_send_dispatch(
                     f"- Physical Locality: {report.locality or report.location}\n"
                     f"- Geographic Coordinates: {maps_link}\n"
                     f"- Evaluated Severity: {report.severity.upper()}\n"
-                    f"- Statutory SLA Deadline: {deadline_str} ({report.sla_hours}h limit)\n"
+                    f"- Target SLA Deadline: {deadline_str} ({report.sla_hours}h limit)\n"
                     f"- AI Triage Rationale: {report.severity_rationale or 'Evaluated via multi-signal civic triage'}\n"
                     f"- Citizen Evidence Media URL: {report.media_url or 'N/A'}\n"
                     f"- Dispatch Kind: {kind.upper()} (Escalation Level: {escalation_level})\n"
@@ -139,12 +139,12 @@ async def draft_and_send_dispatch(
 
             if not draft_res:
                 # Heuristic formal draft
-                subject = f"[{'ESCALATION L' + str(escalation_level) if kind == 'escalation' else 'OFFICIAL DISPATCH'} #{docket_id}] {report.title}"
+                subject = f"[{'ESCALATION L' + str(escalation_level) if kind == 'escalation' else 'DISPATCH WORK ORDER'} #{docket_id}] {report.title}"
                 body_eng = (
                     f"To: {recipient_office}\n"
                     f"From: Jan Aawaz Autonomous Civic Triage System\n"
                     f"Date: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}\n\n"
-                    f"SUBJECT: Official Work Order Transmission for Docket #{docket_id}\n\n"
+                    f"SUBJECT: Incident Work Order Transmission for Docket #{docket_id}\n\n"
                     f"Please be advised that an infrastructure failure requiring departmental redressal has been verified:\n"
                     f"- Title: {report.title}\n"
                     f"- Locality: {report.locality or report.location}\n"
@@ -159,7 +159,7 @@ async def draft_and_send_dispatch(
 
             # Assemble complete dispatch document
             full_body = (
-                f"=== JAN AAWAZ OFFICIAL DISPATCH NOTICE ===\n"
+                f"=== JAN AAWAZ DISPATCH NOTICE (PROTOTYPE) ===\n"
                 f"Docket Reference: {docket_id}\n"
                 f"Recipient Office: {recipient_office}\n"
                 f"Locality: {report.locality or report.location}\n"

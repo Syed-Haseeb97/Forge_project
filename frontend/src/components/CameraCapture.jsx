@@ -267,7 +267,7 @@ export default function CameraCapture({ onCapture, onClear, currentPreview = nul
           <div className="flex items-center justify-between text-white max-w-2xl w-full mx-auto">
             <div className="flex items-center gap-2">
               <Camera size={18} className="text-[#e8b855]" />
-              <span className="font-semibold text-xs tracking-wider uppercase">Official Camera Capture</span>
+              <span className="font-semibold text-xs tracking-wider uppercase">Camera Verification Capture</span>
             </div>
             <button
               type="button"

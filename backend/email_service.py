@@ -104,7 +104,7 @@ def build_verification_html(code: str, email: str, title: str = "Verify your ema
 </head>
 <body style="margin: 0; padding: 32px 16px; background-color: #f6f4ee; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #102a2f;">
   <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 560px; background-color: #ffffff; border: 1px solid rgba(23, 62, 66, 0.12); border-radius: 20px; overflow: hidden; box-shadow: 0 16px 45px rgba(26, 53, 52, 0.08);">
-    <!-- Official Top Strip with Logo -->
+    <!-- Top Strip with Logo -->
     <tr>
       <td style="background-color: #0d3035; padding: 18px 24px; text-align: center;">
         <div style="margin-bottom: 4px;">
@@ -126,7 +126,7 @@ def build_verification_html(code: str, email: str, title: str = "Verify your ema
         </h1>
         {greeting_html}
         <p style="font-size: 14px; line-height: 1.6; color: #5f716e; margin: 0 0 24px 0;">
-          A citizen verification request was initiated for <strong style="color: #0d3035;">{email}</strong> on the <strong>Jan Aawaz (जनAawaz)</strong> Public Grievance Portal. Use your official 6-digit authentication code below:
+          A citizen verification request was initiated for <strong style="color: #0d3035;">{email}</strong> on the <strong>Jan Aawaz (जनAawaz)</strong> Public Grievance Portal. Use your 6-digit authentication code below:
         </p>
 
         <!-- Code Box -->
@@ -234,14 +234,14 @@ def send_dispatch_email(to_email: str, subject: str, body_text: str) -> bool:
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f6f4ee; padding: 24px; color: #102a2f;">
   <div style="max-width: 650px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid rgba(23,62,66,0.15); overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.05);">
     <div style="background-color: #0d3035; padding: 20px 28px; color: #ffffff;">
-      <h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #e8b855;">Jan Aawaz (जनAawaz) Official Dispatch Notice</h2>
+      <h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #e8b855;">Jan Aawaz (जनAawaz) Prototype Dispatch Notice</h2>
       <p style="margin: 4px 0 0 0; font-size: 11px; opacity: 0.8; letter-spacing: 0.1em; text-transform: uppercase;">MUNICIPAL INFRASTRUCTURE & CIVIC REDRESSAL</p>
     </div>
     <div style="padding: 28px; font-size: 13px; line-height: 1.7; color: #334e4c; white-space: pre-wrap;">
 {body_text}
     </div>
     <div style="background-color: #08272b; padding: 14px 28px; text-align: center; color: rgba(255,255,255,0.4); font-size: 10px;">
-      Sent to configured dispatch inbox · Jan Aawaz Autonomous Governance Infrastructure
+      Sent to configured demo dispatch inbox · Jan Aawaz Autonomous Civic Infrastructure
     </div>
   </div>
 </body>

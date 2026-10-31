@@ -106,7 +106,7 @@ export default function ReportsList() {
             </h1>
 
             <p className="mt-2 text-xs sm:text-sm text-[#5f716e] dark:text-[#95a9a6] max-w-2xl leading-relaxed">
-              Official public registry of reported hazards. Every complaint is evaluated by AI, routed to responsible municipal departments, and maintained openly for accountability.
+              Public registry of reported hazards. Every complaint is evaluated by AI, routed to responsible municipal departments, and maintained openly for accountability.
             </p>
           </div>
 

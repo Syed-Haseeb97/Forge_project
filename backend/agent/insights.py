@@ -56,7 +56,7 @@ def _build_deterministic_brief(stats: Dict[str, Any]) -> Dict[str, Any]:
 
     brief = (
         f"The Jan Aawaz civic telemetry platform is actively tracking {total} reported grievances across municipal sectors. "
-        f"Currently, {active} issues remain active, {resolved} have completed verified resolution, and {overdue} dockets are flagged overdue under SLA citizen charters. "
+        f"Currently, {active} issues remain active, {resolved} have completed verified resolution, and {overdue} dockets are flagged overdue under SLA guidelines. "
         f"Spatial grid clustering has isolated {hotspots_count} active 300-meter cluster(s) with concentrated citizen complaints, heavily impacting {top_dept}."
     )
 

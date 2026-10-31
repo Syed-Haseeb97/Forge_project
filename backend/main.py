@@ -1159,7 +1159,7 @@ async def update_status(
         )
 
     authority_email = current_authority.get("sub", "authority")
-    official_actor = actor or f"Municipal Authority ({authority_email})"
+    authority_actor = actor or f"Authority ({authority_email})"
 
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(Report).where(Report.id == report_id))
@@ -1178,7 +1178,7 @@ async def update_status(
             session=session,
             report_id=report_id,
             status=clean_status,
-            actor=official_actor,
+            actor=authority_actor,
             action_type="status_update",
             notes=note or f"Ticket status transitioned to {clean_status.replace('_', ' ').title()}.",
         )
@@ -1382,7 +1382,7 @@ async def resolve_report_with_proof(
     """Closeout ticket with verified resolution notes and photographic completion proof (Authority only)"""
     from sqlalchemy import select
     authority_email = current_authority.get("sub", "authority")
-    official_actor = actor or f"Municipal Authority ({authority_email})"
+    authority_actor = actor or f"Authority ({authority_email})"
 
     if not media or not media.filename:
         raise HTTPException(
@@ -1455,7 +1455,7 @@ async def resolve_report_with_proof(
             session=session,
             report_id=report_id,
             status=StatusEnum.resolved.value,
-            actor=official_actor,
+            actor=authority_actor,
             action_type="resolution_proof",
             notes=f"Issue resolved: {resolution_notes}{verdict_str}",
             media_url=resolved_media_url,
@@ -1827,7 +1827,7 @@ async def add_comment(
         if body.role == "authority" and user_role != "authority":
             raise HTTPException(
                 status_code=403,
-                detail="Municipal authority credentials required to append official updates.",
+                detail="Authority credentials required to append authority updates.",
             )
 
         effective_role = "authority" if (user_role == "authority" and body.role == "authority") else "citizen"
@@ -1843,14 +1843,14 @@ async def add_comment(
         )
         session.add(comment)
 
-        # Log timeline comment note if official
+        # Log timeline comment note if authority
         if effective_role == "authority":
             await log_timeline(
                 session=session,
                 report_id=report_id,
                 status=report.status.value,
-                actor=f"Official ({comment.author})",
-                action_type="official_note",
+                actor=f"Authority ({comment.author})",
+                action_type="authority_note",
                 notes=body.content[:300],
             )
 

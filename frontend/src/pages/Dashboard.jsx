@@ -315,7 +315,7 @@ export default function Dashboard() {
                     <p className="mt-7 text-[11px] font-bold tracking-[0.16em] text-[#ba7c29]">CIVIC AI IS REVIEWING</p>
                     <h2 className="mt-2 font-serif text-3xl font-bold">Assessing your report</h2>
                     <p className="mt-3 max-w-sm text-sm leading-6 text-[#687977] dark:text-[#95a9a6]">
-                      Interpreting evidence, evaluating statutory priority, and routing to the municipal engineering authority.
+                      Interpreting evidence, evaluating priority, and routing to the responsible engineering department.
                     </p>
                   </div>
                 ) : submittedReport ? (
@@ -349,7 +349,7 @@ export default function Dashboard() {
                         to={`/reports/${submittedReport.id}`}
                         className="btn-primary text-xs"
                       >
-                        VIEW OFFICIAL DOCKET →
+                        VIEW INCIDENT DOCKET →
                       </Link>
                       <button
                         onClick={() => {
@@ -643,8 +643,8 @@ export default function Dashboard() {
           <div className="grid sm:grid-cols-3 pt-4">
             {[
               { no: '01', icon: 'camera', title: 'Capture the issue', copy: 'Share a photo, voice note, or written description from wherever you are.' },
-              { no: '02', icon: 'brain', title: 'AI understands it', copy: 'AI interprets the visual or audio evidence and evaluates statutory urgency level.' },
-              { no: '03', icon: 'route', title: 'Forward & resolve', copy: 'The evaluated report is dispatched to the responsible municipal authority for field action.' },
+              { no: '02', icon: 'brain', title: 'AI understands it', copy: 'AI interprets the visual or audio evidence and evaluates urgency level and SLA.' },
+              { no: '03', icon: 'route', title: 'Forward & resolve', copy: 'The evaluated report is dispatched to the responsible department for field action.' },
             ].map((item, index) => (
               <article
                 key={item.no}
@@ -947,7 +947,7 @@ export default function Dashboard() {
                     MUNICIPAL OVERVIEW
                   </p>
                   <h3 className="mt-1 font-serif text-2xl font-bold text-[#0d3035] dark:text-[#f6f4ee]">
-                    Citizen charter metrics
+                    Service benchmark metrics
                   </h3>
                 </div>
                 {stats && (

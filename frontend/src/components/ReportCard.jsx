@@ -46,7 +46,7 @@ export default function ReportCard({ report, onUpvote, onWatchlistChange }) {
         }`}
       >
         <div>
-          {/* Statutory Critical Hazard Top Strip */}
+          {/* Critical Hazard Top Strip */}
           {isCritical && (
             <div className="bg-[#b04b37] text-white text-[10px] sm:text-[11px] font-bold tracking-[0.14em] uppercase px-4 py-1.5 flex items-center justify-between -mx-5 sm:-mx-6 -mt-5 sm:-mt-6 mb-4 rounded-t-[20px] shadow-sm">
               <span className="flex items-center gap-2">
@@ -54,7 +54,7 @@ export default function ReportCard({ report, onUpvote, onWatchlistChange }) {
                   <span className="animate-ping absolute inline-flex size-full rounded-full bg-white opacity-85" />
                   <span className="relative inline-flex size-2 rounded-full bg-white" />
                 </span>
-                CRITICAL HAZARD · STATUTORY PRIORITY 1
+                CRITICAL HAZARD · TARGET PRIORITY 1
               </span>
               <span className="bg-black/25 text-white font-mono text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wider">
                 {report.sla_hours ? `${report.sla_hours}H SLA` : 'IMMEDIATE SLA'}

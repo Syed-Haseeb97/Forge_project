@@ -124,7 +124,7 @@ def _fallback_triage_result(
         "routed_to": dept,
         "agent_trace": trace,
         "confidence": 0.65,
-        "severity_rationale": "Safety heuristic fallback applied within statutory response budget.",
+        "severity_rationale": "Safety heuristic fallback applied within target response budget.",
         "detected_language": "English",
         "locality": location,
         "visible_hazards": ["Unverified field report requiring departmental physical inspection"],

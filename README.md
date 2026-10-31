@@ -21,7 +21,7 @@
 Civic grievances in municipal jurisdictions across India face systemic challenges:
 1. **The Bureaucratic Black Hole**: Citizens submit complaints with little visibility into which engineering department received them, who is assigned, or when repairs will occur.
 2. **Missing Multi-Signal Urgency Triage**: A pothole next to an active primary school during monsoon season is exponentially more hazardous than a cosmetic crack on a suburban curb, yet existing systems treat them as equal tickets.
-3. **Absence of Statutory Accountability**: Citizens have no enforceable Service Level Agreements (SLAs), and dockets linger indefinitely without automated escalation.
+3. **Absence of Enforceable SLAs**: Citizens have no clear Service Level Agreements (SLAs), and complaints linger indefinitely without automated escalation.
 4. **Fraudulent Closures**: Dishonest contractors frequently mark dockets "resolved" using false claims or unrelated photos taken miles away.
 5. **Language & Linguistic Barriers**: Technical municipal portals are overwhelmingly English-first, excluding non-English speaking citizens from understanding administrative actions.
 
@@ -32,10 +32,10 @@ Civic grievances in municipal jurisdictions across India face systemic challenge
 **Jan Aawaz (जनAawaz)** transforms civic grievance management into an **autonomous, agentic, multi-signal intelligence pipeline**:
 - **Multi-Signal Context Correlation**: Correlates visual evidence with live microclimate weather forecasts, OpenStreetMap sensitive site queries (schools, clinics within 250m), and live database recurrence to assign dynamic SLAs (24h to 336h).
 - **Autonomous Dispatch Agent**: Automatically drafts formal municipal work orders in English and regional languages with direct Google Maps coordinate links.
-- **Statutory SLA Watchdog**: Runs an autonomous background loop escalating overdue tickets from Department Heads to Municipal Commissioners, and ultimately flagging tickets publicly as overdue.
+- **Automated SLA Watchdog**: Runs an autonomous background loop escalating overdue tickets across tiered notification levels, and ultimately flagging tickets publicly as overdue.
 - **Multimodal AI Resolution Auditing**: Uses computer vision to audit "after-photos" against baseline defect photos, strictly rejecting closures if the issue remains unresolved.
 - **Multilingual Plain-Language Explainer (जन संवाद)**: Empowers residents across 8 Indian languages with plain-language summaries and browser-based audio narration via the Web Speech API.
-- **Strict Zero-Dummy-Data Architecture**: All analytics, map hotspots, and metrics are computed dynamically from real database submissions, official live APIs, and open datasets.
+- **Strict Zero-Dummy-Data Architecture**: All analytics, map hotspots, and metrics are computed dynamically from real database submissions, live APIs, and open datasets.
 
 ---
 
@@ -113,8 +113,8 @@ Jan Aawaz adheres to a **strict zero-dummy-data policy**. Every statistic, map o
 |---|---|---|
 | **AI Civic Pulse Brief** | Executive municipal brief with 3 prioritized actions and 10-minute live cache badge. | [`docs/screenshots/dashboard_civic_brief.png`](docs/screenshots/README.md) |
 | **AI Reasoning Trace** | Full multi-signal audit trace citing Open-Meteo rain, Overpass sensitive sites, and SLA rationale. | [`docs/screenshots/agentic_reasoning_trace.png`](docs/screenshots/README.md) |
-| **Plain-Language Explainer** | 8-language citizen ombudsman summary in Hindi with audio listen control. | [`docs/screenshots/multilingual_explainer_hindi.png`](docs/screenshots/README.md) |
-| **Official Dispatch Work Order** | Formal bureaucratic work order letter with Google Maps coordinates and SLA deadline. | [`docs/screenshots/dispatch_letter_modal.png`](docs/screenshots/README.md) |
+| **Plain-Language Explainer** | 8-language citizen summary in Hindi with audio listen control. | [`docs/screenshots/multilingual_explainer_hindi.png`](docs/screenshots/README.md) |
+| **Dispatch Work Order** | Departmental work order letter with Google Maps coordinates and SLA deadline. | [`docs/screenshots/dispatch_letter_modal.png`](docs/screenshots/README.md) |
 | **Multimodal Resolution Audit** | Comparative AI verification audit rejecting incomplete repairs and logging timeline strikes. | [`docs/screenshots/resolution_audit_before_after.png`](docs/screenshots/README.md) |
 | **300m Spatial GIS Hotspots** | Full-screen GIS map view rendering translucent 300-meter circular grievance clusters. | [`docs/screenshots/gis_hotspot_clusters.png`](docs/screenshots/README.md) |
 

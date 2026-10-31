@@ -1,6 +1,6 @@
 # ⏱️ Jan Aawaz (जनAawaz) – 3-Minute Live Judging Script
 
-> **Official Hackathon Scoring Rubric (100 Points Total)**:
+> **Hackathon Scoring Rubric (100 Points Total)**:
 > 1. **Relevance / Real-World Impact / USP (25 pts)**
 > 2. **AI Reasoning / Agentic Execution (25 pts)**
 > 3. **Technical Depth (20 pts)**
@@ -10,13 +10,13 @@
 
 ### Segment 1: [0:00 - 0:45] Relevance, Real-World Impact & USP (25 pts)
 **Speaker**:
-"Distinguished judges, civic grievances in India typically disappear into a bureaucratic black hole. A citizen reports a severe water main burst or pothole cluster; weeks pass with zero transparency, no statutory timeline, and eventually contractors mark it 'resolved' without touching the site.
+"Distinguished judges, civic grievances in India typically disappear into a bureaucratic black hole. A citizen reports a severe water main burst or pothole cluster; weeks pass with zero transparency, no enforced timeline, and eventually contractors mark it 'resolved' without touching the site.
 
 Welcome to **Jan Aawaz (जनAawaz)**—an autonomous civic triage, municipal dispatch, and public accountability engine designed for the Digital Governance & Civic Pulse theme.
 
 Notice our core rule: **Zero dummy data.** Every ticket, map cluster, and briefing you see right now is computed live from real citizen submissions, live microclimate weather, OpenStreetMap geospatial data, and Supabase PostgreSQL.
 
-Our unique selling proposition is radical citizen accessibility: in our portal, residents aren't trapped by bureaucratic jargon. Any resident can click **जन संवाद (Plain-Language Explainer)** in 8 Indian languages—Hindi, Tamil, Telugu, Kannada, Bengali, Marathi, Malayalam, and English—and press **Listen** to hear an audible briefing of what happened and what the statutory municipal deadline is via browser speech synthesis."
+Our unique selling proposition is radical citizen accessibility: in our portal, residents aren't trapped by bureaucratic jargon. Any resident can click **जन संवाद (Plain-Language Explainer)** in 8 Indian languages—Hindi, Tamil, Telugu, Kannada, Bengali, Marathi, Malayalam, and English—and press **Listen** to hear an audible briefing of what happened and what the target municipal deadline is via browser speech synthesis."
 
 *(Action: Click language selector to 'हिन्दी (Hindi)', click 'Listen' to let judges hear speech playback).*
 
@@ -44,8 +44,8 @@ Look right here at our **AI Reasoning Trace**: notice how the priority was autom
 **Speaker**:
 "Next is technical depth across autonomous backend agents and asynchronous systems:
 
-1. **Autonomous Municipal Dispatch**: Immediately following triage, an asynchronous background agent drafts a formal government work order in English and regional language, complete with docket ID, severity, SLA deadline, and a clickable Google Maps link, dispatched immediately to the official municipal inbox.
-2. **Idempotent SLA Watchdog**: In production, tickets have statutory SLAs—24 hours for critical, 72 hours for high. Our background watchdog worker monitors all active tickets in an asyncio loop.
+1. **Autonomous Municipal Dispatch**: Immediately following triage, an asynchronous background agent drafts a formal work order in English and regional language, complete with docket ID, severity, SLA deadline, and a clickable Google Maps link, dispatched immediately to the configured demo dispatch inbox.
+2. **Idempotent SLA Watchdog**: In production, tickets have target SLAs—24 hours for critical, 72 hours for high. Our background watchdog worker monitors all active tickets in an asyncio loop.
 3. **Demo Time Acceleration**: For this live evaluation, we built in demo time compression via `SLA_TIME_SCALE=3600`. As deadline thresholds elapse, the watchdog autonomously escalates:
    - **Level 1**: Urgent reminder dispatched to Department Head.
    - **Level 2**: Formal escalation to Municipal Commissioner.

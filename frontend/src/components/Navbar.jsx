@@ -108,7 +108,7 @@ export default function Navbar() {
                   </span>
                   {user.role === 'authority' && (
                     <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#ba7c29] text-white uppercase">
-                      Official
+                      Authority
                     </span>
                   )}
                 </div>

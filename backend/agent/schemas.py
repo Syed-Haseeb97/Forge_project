@@ -151,7 +151,7 @@ class DispatchDraft(BaseModel):
     )
     body_english: str = Field(
         ...,
-        description="Formal official dispatch letter in English detailing the incident, coordinates, hazards, SLA deadline, and required departmental work order"
+        description="Formal dispatch work order in English detailing the incident, coordinates, hazards, SLA deadline, and required departmental work order"
     )
     body_regional: Optional[str] = Field(
         default=None,

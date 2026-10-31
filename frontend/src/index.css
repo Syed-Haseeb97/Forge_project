@@ -1,0 +1,344 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Libre+Caslon+Display&display=swap');
+@import 'leaflet/dist/leaflet.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   CIVICLINE DESIGN SYSTEM (Official Digital Public Service)
+   ========================================================================== */
+
+:root {
+  --bg-canvas: #f6f4ee;
+  --bg-surface: #ffffff;
+  --bg-subtle: #fbfaf6;
+  --bg-dark: #0d3035;
+  --bg-header: rgba(246, 244, 238, 0.96);
+  --border-color: rgba(23, 62, 66, 0.12);
+  --border-subtle: rgba(23, 62, 66, 0.08);
+  --text-main: #102a2f;
+  --text-muted: #5f716e;
+  --text-subtle: #8a9896;
+  --accent-gold: #e8b855;
+  --accent-gold-dark: #ba7c29;
+  --accent-teal: #0d3035;
+  --accent-teal-hover: #16444a;
+  --accent-mint: #e3f0ea;
+  --accent-sage: #347161;
+  color-scheme: light;
+}
+
+html.dark,
+body.dark,
+#root.dark,
+.dark,
+[data-theme='dark'] {
+  --bg-canvas: #06181b !important;
+  --bg-surface: #0d3035 !important;
+  --bg-subtle: #123c42 !important;
+  --bg-dark: #041012 !important;
+  --bg-header: rgba(6, 24, 27, 0.96) !important;
+  --border-color: rgba(255, 255, 255, 0.12) !important;
+  --border-subtle: rgba(255, 255, 255, 0.07) !important;
+  --text-main: #f6f4ee !important;
+  --text-muted: #95a9a6 !important;
+  --text-subtle: #687e7b !important;
+  --accent-gold: #e8b855 !important;
+  --accent-gold-dark: #f0c56b !important;
+  --accent-teal: #e8b855 !important;
+  --accent-teal-hover: #f0c56b !important;
+  --accent-mint: #15454b !important;
+  --accent-sage: #70b99e !important;
+  color-scheme: dark !important;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    min-width: 320px;
+    background-color: var(--bg-canvas) !important;
+    color: var(--text-main) !important;
+    font-family: 'DM Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  button,
+  a,
+  select {
+    cursor: pointer;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 2px solid var(--accent-gold-dark);
+    outline-offset: 3px;
+  }
+}
+
+/* Civic Grid Pattern */
+.civic-grid {
+  background-image:
+    linear-gradient(rgba(20, 57, 60, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 57, 60, 0.04) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: linear-gradient(to right, black, transparent 90%);
+}
+
+.dark .civic-grid {
+  background-image:
+    linear-gradient(rgba(232, 184, 85, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(232, 184, 85, 0.04) 1px, transparent 1px);
+}
+
+/* AI Orbit Spinner */
+.ai-orbit::after {
+  position: absolute;
+  inset: -9px;
+  content: '';
+  border: 1px solid rgba(186, 124, 41, 0.35);
+  border-top-color: #d09435;
+  border-radius: 999px;
+  animation: orbit 1.2s linear infinite;
+}
+
+@keyframes orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+::selection {
+  background: #e8b855;
+  color: #0d3035;
+}
+
+/* Base Component classes matching CivicLine */
+.card {
+  background-color: var(--bg-surface) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-main) !important;
+  border-width: 1px;
+  border-radius: 1.5rem; /* 24px */
+  padding: 1.25rem;
+  box-shadow: 0 16px 45px rgba(27, 52, 51, 0.08);
+  transition: all 0.15s ease;
+}
+@media (min-width: 640px) {
+  .card {
+    padding: 1.75rem;
+    border-radius: 1.625rem; /* 26px */
+  }
+}
+
+.dark .card {
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+}
+
+.input {
+  background-color: var(--bg-subtle) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-main) !important;
+  border-radius: 0.75rem; /* 12px */
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  width: 100%;
+  outline: none;
+  transition: all 0.15s ease;
+}
+.input:focus {
+  border-color: var(--accent-gold-dark) !important;
+  box-shadow: 0 0 0 3px rgba(186, 124, 41, 0.15);
+}
+
+.btn-primary {
+  background-color: var(--accent-teal) !important;
+  color: #ffffff !important;
+  font-weight: 700;
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  padding: 0.875rem 1.5rem;
+  border-radius: 9999px;
+  box-shadow: 0 12px 30px rgba(13, 48, 53, 0.18);
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.btn-primary:hover {
+  background-color: var(--accent-teal-hover) !important;
+  transform: translateY(-1px);
+}
+
+.dark .btn-primary {
+  background-color: #e8b855 !important;
+  color: #0d3035 !important;
+  box-shadow: 0 12px 30px rgba(232, 184, 85, 0.18);
+}
+.dark .btn-primary:hover {
+  background-color: #f0c56b !important;
+}
+
+.btn-gold {
+  background-color: #e8b855;
+  color: #102a2f;
+  font-weight: 800;
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  padding: 0.875rem 1.75rem;
+  border-radius: 9999px;
+  box-shadow: 0 8px 24px rgba(232, 184, 85, 0.28);
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+}
+.btn-gold:hover {
+  background-color: #efc56b;
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background-color: rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-weight: 700;
+  font-size: 0.8125rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.15s ease;
+}
+.btn-secondary:hover {
+  background-color: #ffffff;
+}
+.dark .btn-secondary {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+.dark .btn-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* CivicLine Severity Badges */
+.severity-critical {
+  background-color: #fbeee8;
+  color: #9e3926;
+  border: 1px solid rgba(176, 75, 55, 0.25);
+  font-weight: 800;
+}
+.dark .severity-critical {
+  background-color: rgba(176, 75, 55, 0.25);
+  color: #fca5a5;
+  border-color: rgba(176, 75, 55, 0.45);
+}
+
+.severity-high {
+  background-color: #fff4dd;
+  color: #94611b;
+  border: 1px solid rgba(186, 124, 41, 0.25);
+  font-weight: 800;
+}
+.dark .severity-high {
+  background-color: rgba(186, 124, 41, 0.25);
+  color: #fde68a;
+  border-color: rgba(186, 124, 41, 0.45);
+}
+
+.severity-medium {
+  background-color: #eef2ed;
+  color: #4a635f;
+  border: 1px solid rgba(74, 99, 95, 0.2);
+  font-weight: 700;
+}
+.dark .severity-medium {
+  background-color: rgba(74, 99, 95, 0.3);
+  color: #cbd5e1;
+  border-color: rgba(74, 99, 95, 0.4);
+}
+
+.severity-low {
+  background-color: #e4f0e8;
+  color: #2f7661;
+  border: 1px solid rgba(47, 118, 97, 0.2);
+  font-weight: 700;
+}
+.dark .severity-low {
+  background-color: rgba(47, 118, 97, 0.25);
+  color: #a7f3d0;
+  border-color: rgba(47, 118, 97, 0.4);
+}
+
+/* CivicLine Status Badges */
+.status-open {
+  background-color: #fff2d8;
+  color: #94611b;
+  border: 1px solid rgba(186, 124, 41, 0.25);
+}
+.dark .status-open {
+  background-color: rgba(186, 124, 41, 0.2);
+  color: #fde68a;
+}
+
+.status-in_progress {
+  background-color: #e9efea;
+  color: #347161;
+  border: 1px solid rgba(52, 113, 97, 0.25);
+}
+.dark .status-in_progress {
+  background-color: rgba(52, 113, 97, 0.25);
+  color: #a7f3d0;
+}
+
+.status-resolved {
+  background-color: #e7f2ec;
+  color: #33705f;
+  border: 1px solid rgba(51, 112, 95, 0.25);
+}
+.dark .status-resolved {
+  background-color: rgba(51, 112, 95, 0.3);
+  color: #6ee7b7;
+}
+
+.status-closed {
+  background-color: #f1f0ea;
+  color: #6d7d7a;
+  border: 1px solid rgba(109, 125, 122, 0.2);
+}
+.dark .status-closed {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #95a9a6;
+}
+
+/* Custom leaflet pin styles */
+.custom-leaflet-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  color: white;
+  font-weight: bold;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.25);
+  border: 2px solid white;
+}
+
+.dark .leaflet-tile {
+  filter: brightness(0.7) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.85);
+}
+
+@keyframes leaflet-ping {
+  75%, 100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}

@@ -128,6 +128,12 @@ async def watchdog_worker_loop():
             await asyncio.sleep(10)
 
 
+def is_watchdog_running() -> bool:
+    """Return True if the background watchdog task is active and running."""
+    global _WATCHDOG_TASK
+    return bool(_WATCHDOG_TASK and not _WATCHDOG_TASK.done())
+
+
 def start_watchdog_background_task() -> asyncio.Task:
     """Start the watchdog background worker loop."""
     global _WATCHDOG_TASK

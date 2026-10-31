@@ -98,13 +98,17 @@ export default function CivicMap({
     ? hotspotCircles
     : (hotspots && hotspots.length > 0 ? hotspots : [])
 
-  let defaultCenter = [28.6139, 77.2090]
+  // Center on selectedPosition if set, or average of valid reports, or neutral India-wide center
+  let defaultCenter = [20.5937, 78.9629]
+  let effectiveZoom = zoom !== undefined ? zoom : (selectedPosition && selectedPosition[0] ? 14 : 5)
+
   if (selectedPosition && selectedPosition[0] && selectedPosition[1]) {
     defaultCenter = selectedPosition
   } else if (validReports.length > 0) {
     const avgLat = validReports.reduce((s, r) => s + r.latitude, 0) / validReports.length
     const avgLng = validReports.reduce((s, r) => s + r.longitude, 0) / validReports.length
     defaultCenter = [avgLat, avgLng]
+    if (zoom === undefined) effectiveZoom = 12
   }
 
   return (
@@ -114,11 +118,11 @@ export default function CivicMap({
     >
       <MapContainer
         center={defaultCenter}
-        zoom={zoom}
+        zoom={effectiveZoom}
         scrollWheelZoom={true}
         style={{ height: '100%', width: '100%' }}
       >
-        <ChangeView center={defaultCenter} zoom={zoom} />
+        <ChangeView center={defaultCenter} zoom={effectiveZoom} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

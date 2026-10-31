@@ -8,9 +8,10 @@ import toast from 'react-hot-toast'
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { user, isVerified } = useAuth()
+  const { user, isVerified, isAuthority } = useAuth()
   const [stats, setStats] = useState(null)
   const [insights, setInsights] = useState(null)
+  const [healthInfo, setHealthInfo] = useState(null)
   const [recent, setRecent] = useState([])
   const [criticalReports, setCriticalReports] = useState([])
   const [activeTab, setActiveTab] = useState('report') // 'report' | 'track'
@@ -24,7 +25,10 @@ export default function Dashboard() {
     category: 'road_damage',
     description: '',
     location: '',
+    latitude: '',
+    longitude: '',
   })
+  const [quickLocating, setQuickLocating] = useState(false)
   const [quickFile, setQuickFile] = useState(null)
   const [processing, setProcessing] = useState(false)
   const [submittedReport, setSubmittedReport] = useState(null)
@@ -32,21 +36,45 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [statsRes, reportsRes, insightsRes] = await Promise.all([
+        const [statsRes, reportsRes, insightsRes, healthRes] = await Promise.all([
           axios.get('/api/stats'),
           axios.get('/api/reports', { params: { limit: 8 } }),
           axios.get('/api/insights').catch(() => ({ data: null })),
+          axios.get('/api/health').catch(() => ({ data: null })),
         ])
         setStats(statsRes.data)
         setRecent(reportsRes.data)
         setCriticalReports(reportsRes.data.filter(r => r.severity === 'critical' || r.severity === 'high'))
         if (insightsRes?.data) setInsights(insightsRes.data)
+        if (healthRes?.data) setHealthInfo(healthRes.data)
       } catch (err) {
         console.error('Failed to load dashboard metrics', err)
       }
     }
     fetchData()
   }, [])
+
+  const acquireQuickLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error('Geolocation not supported by browser')
+      return
+    }
+    setQuickLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = Number(pos.coords.latitude.toFixed(6))
+        const lng = Number(pos.coords.longitude.toFixed(6))
+        setQuickForm(f => ({ ...f, latitude: String(lat), longitude: String(lng) }))
+        setQuickLocating(false)
+        toast.success(`GPS coordinates captured (${lat}, ${lng})`)
+      },
+      () => {
+        setQuickLocating(false)
+        toast.error('Location permission denied or unavailable')
+      },
+      { timeout: 8000, enableHighAccuracy: true }
+    )
+  }
 
   const handleQuickSubmit = async (e) => {
     e.preventDefault()
@@ -58,6 +86,13 @@ export default function Dashboard() {
 
     if (!quickForm.title.trim() || !quickForm.description.trim()) {
       toast.error('Please enter issue title and description')
+      return
+    }
+
+    // Must have coordinates or redirect to full submission page to place map pin
+    if (!quickForm.latitude || !quickForm.longitude) {
+      toast('Please specify incident location on the map to complete your report', { icon: '📍' })
+      navigate('/submit', { state: { ...quickForm } })
       return
     }
 
@@ -108,6 +143,48 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-16 lg:space-y-24">
+      {/* Authority Diagnostics Bar (Visible exclusively to Municipal Authority accounts) */}
+      {isAuthority && healthInfo && (
+        <div className="border-b border-[#ba7c29]/25 bg-[#fffaf0] dark:bg-[#071f23] px-5 py-2 text-[11px] font-mono text-[#0d3035] dark:text-[#f6f4ee] transition-colors">
+          <div className="mx-auto max-w-[1240px] flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="size-2 rounded-full bg-[#15803d] animate-pulse" />
+              <span className="font-bold text-[#ba7c29] uppercase tracking-wider text-[10px]">
+                Authority Diagnostics
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-4 text-[10px]">
+              <span>
+                Gemini AI:{' '}
+                <strong className={healthInfo.gemini_configured ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-600'}>
+                  {healthInfo.gemini_configured ? 'Online' : 'Not configured'}
+                </strong>
+              </span>
+              <span className="text-[#95a9a6]">•</span>
+              <span>
+                Email:{' '}
+                <strong className={healthInfo.email_configured ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-600'}>
+                  {healthInfo.email_configured ? 'Active' : 'Disabled'}
+                </strong>
+              </span>
+              <span className="text-[#95a9a6]">•</span>
+              <span>
+                SLA Watchdog:{' '}
+                <strong className={healthInfo.watchdog_running ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-600'}>
+                  {healthInfo.watchdog_running ? 'Running' : 'Stopped'}
+                </strong>
+              </span>
+              <span className="text-[#95a9a6]">•</span>
+              <span>
+                SLA Time Scale:{' '}
+                <strong className="text-[#0d3035] dark:text-[#e8b855]">
+                  {healthInfo.sla_time_scale || 1}x
+                </strong>
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Demo Time Compression Banner */}
       {stats?.sla_time_scale && stats.sla_time_scale !== 1 && (
         <div className="mx-auto max-w-[1240px] pt-4 px-4 sm:px-6">
@@ -331,9 +408,20 @@ export default function Dashboard() {
                     </div>
 
                     <div>
-                      <label className="mb-1.5 block text-xs font-bold text-[#102a2f] dark:text-[#f6f4ee]">
-                        Location / Street Reference
-                      </label>
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <label className="block text-xs font-bold text-[#102a2f] dark:text-[#f6f4ee]">
+                          Location / Street Reference
+                        </label>
+                        <button
+                          type="button"
+                          onClick={acquireQuickLocation}
+                          disabled={quickLocating}
+                          className="flex items-center gap-1 text-[10px] font-bold text-[#ba7c29] hover:underline"
+                        >
+                          <CivicIcon name="location" size={11} />
+                          <span>{quickLocating ? 'Acquiring GPS...' : (quickForm.latitude ? 'GPS Pinned ✓' : 'Pin My GPS')}</span>
+                        </button>
+                      </div>
                       <div className="relative">
                         <CivicIcon name="location" size={17} className="absolute left-3.5 top-3.5 text-[#617572]" />
                         <input
@@ -344,6 +432,11 @@ export default function Dashboard() {
                           onChange={e => setQuickForm(f => ({ ...f, location: e.target.value }))}
                         />
                       </div>
+                      {!quickForm.latitude && (
+                        <p className="mt-1 text-[10px] text-[#70807f] dark:text-[#95a9a6]">
+                          💡 Submitting without GPS coordinates will open the interactive map picker.
+                        </p>
+                      )}
                     </div>
 
                     {/* Evidence buttons */}

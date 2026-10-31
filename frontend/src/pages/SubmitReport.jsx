@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import axios from 'axios'
 import toast from 'react-hot-toast'
 import CivicIcon from '../components/CivicIcon'
@@ -9,15 +9,16 @@ import { useAuth } from '../components/AuthContext'
 
 export default function SubmitReport() {
   const navigate = useNavigate()
+  const routerLocation = useLocation()
   const { user, isVerified } = useAuth()
-  const [form, setForm] = useState({
-    title: '',
-    description: '',
-    category: 'road_damage',
-    location: '',
-    latitude: '28.6139',
-    longitude: '77.2090',
-  })
+  const [form, setForm] = useState(() => ({
+    title: routerLocation.state?.title || '',
+    description: routerLocation.state?.description || '',
+    category: routerLocation.state?.category || 'road_damage',
+    location: routerLocation.state?.location || '',
+    latitude: routerLocation.state?.latitude || '',
+    longitude: routerLocation.state?.longitude || '',
+  }))
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [fileType, setFileType] = useState('image')
@@ -31,7 +32,30 @@ export default function SubmitReport() {
   const fileInputRef = useRef(null)
   const audioInputRef = useRef(null)
 
-  // Use browser GPS
+  // Auto-acquire current location if granted by browser
+  useEffect(() => {
+    if (!form.latitude && !form.longitude && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = Number(pos.coords.latitude.toFixed(6))
+          const lng = Number(pos.coords.longitude.toFixed(6))
+          setForm(f => {
+            if (!f.latitude && !f.longitude) {
+              return { ...f, latitude: String(lat), longitude: String(lng) }
+            }
+            return f
+          })
+          checkProximityDuplicates(lat, lng)
+        },
+        () => {
+          // Geolocation not granted; remains centered on neutral India-wide view
+        },
+        { timeout: 5000, enableHighAccuracy: true }
+      )
+    }
+  }, [])
+
+  // Use browser GPS manually
   const useMyLocation = () => {
     if (!navigator.geolocation) {
       toast.error('Geolocation is not supported by your browser')
@@ -170,6 +194,13 @@ export default function SubmitReport() {
       return
     }
 
+    const latVal = parseFloat(form.latitude)
+    const lngVal = parseFloat(form.longitude)
+    if (!form.latitude || !form.longitude || isNaN(latVal) || isNaN(lngVal)) {
+      toast.error('Please pin the location on the map or click "Use My Current Location"')
+      return
+    }
+
     setSubmitting(true)
     try {
       const fd = new FormData()
@@ -198,8 +229,10 @@ export default function SubmitReport() {
 
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
 
-  const parsedLat = parseFloat(form.latitude) || 28.6139
-  const parsedLng = parseFloat(form.longitude) || 77.2090
+  const hasCoordinates = Boolean(form.latitude && form.longitude && !isNaN(parseFloat(form.latitude)) && !isNaN(parseFloat(form.longitude)))
+  const parsedLat = hasCoordinates ? parseFloat(form.latitude) : null
+  const parsedLng = hasCoordinates ? parseFloat(form.longitude) : null
+  const mapSelectedPos = hasCoordinates ? [parsedLat, parsedLng] : null
 
   return (
     <div className="min-h-screen bg-[#f6f4ee] dark:bg-[#06181b] text-[#102a2f] dark:text-[#f6f4ee] transition-colors py-8 sm:py-14">
@@ -534,10 +567,10 @@ export default function SubmitReport() {
                     </div>
                     <CivicMap
                       interactivePicker={true}
-                      selectedPosition={[parsedLat, parsedLng]}
+                      selectedPosition={mapSelectedPos}
                       onPositionSelect={handleMapPositionSelect}
                       height="200px"
-                      zoom={14}
+                      zoom={hasCoordinates ? 14 : 5}
                     />
                   </div>
 

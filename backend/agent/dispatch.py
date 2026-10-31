@@ -168,11 +168,12 @@ async def draft_and_send_dispatch(
             if draft_res.body_regional:
                 full_body += f"\n\n=== {language.upper()} REGIONAL COMPANION ===\n{draft_res.body_regional.strip()}"
 
-            # Transmit via SMTP
-            sent = send_dispatch_email(
-                to_email=to_email,
-                subject=draft_res.subject,
-                body_text=full_body,
+            # Transmit via configured provider without blocking event loop
+            sent = await asyncio.to_thread(
+                send_dispatch_email,
+                to_email,
+                draft_res.subject,
+                full_body,
             )
 
             # Persist in dispatches table

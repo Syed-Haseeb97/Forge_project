@@ -129,14 +129,17 @@ All system configurations are managed via environment variables documented in [`
 | `GEMINI_API_KEY` | *None (Required)* | Google Gemini API Key for multimodal triage and structured reasoning. |
 | `GEMINI_MODELS` | `gemini-3.5-flash-lite,gemini-3.8-flash,gemini-3.5-flash` | Comma-separated list of Gemini models tried in order. |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./fordge.db` | Async SQLAlchemy database URL (SQLite locally, asyncpg for Supabase PostgreSQL). |
-| `JWT_SECRET` | *Random Secure String* | Cryptographic secret used to sign 12-hour citizen and authority JWT tokens. |
-| `AUTHORITY_EMAILS` | `commissioner@delhi.gov.in,admin@janaawaz.in` | Comma-separated email addresses granted the `authority` role upon authentication. |
-| `DEV_MODE` | `false` | When `true`, returns `dev_code` in OTP auth responses for automated testing. |
+| `JWT_SECRET` | *None (Required, >=32 chars)* | Cryptographic secret used to sign 12-hour JWT tokens. Must be >=32 chars unless `DEV_MODE=true`. Generate using: `python -c "import secrets; print(secrets.token_urlsafe(48))"`. |
+| `AUTHORITY_EMAILS` | `""` (Empty list `[]`) | Comma-separated email addresses granted the `authority` role upon authentication. |
+| `DEV_MODE` | `false` | When `true`, enables ephemeral random JWT secret fallback and returns `dev_code` in OTP auth responses for local/testing convenience. |
 | `CORS_ORIGINS` | `http://localhost:5173,http://localhost:3000` | Comma-separated allowed CORS origins (no wildcards with credentials). |
+| `EMAIL_PROVIDER` | `smtp` | Transactional email provider: `smtp` (Gmail SSL) or `resend` (Resend REST API). |
+| `GMAIL_USER` / `GMAIL_APP_PASSWORD` | *Optional* | Gmail SMTP credentials when `EMAIL_PROVIDER=smtp`. |
+| `RESEND_API_KEY` | *Optional* | Resend API key (`re_...`) when `EMAIL_PROVIDER=resend`. |
+| `EMAIL_FROM` | *Derived* | Sender name and address for verification codes and dispatch notices. |
 | `DISPATCH_EMAIL` | `dispatch@janaawaz.in` | Municipal inbox where automated dispatch letters and work orders are emailed. |
 | `WATCHDOG_INTERVAL_SEC` | `60` | Frequency in seconds at which the background SLA watchdog inspects tickets. |
 | `SLA_TIME_SCALE` | `1.0` | Demo time compression factor (e.g. `3600` makes 1 hour elapse in 1 real second). |
-| `GMAIL_USER` / `GMAIL_APP_PASSWORD` | *Optional* | SMTP credentials for real dispatch and OTP verification emails. |
 | `VITE_API_BASE` | `""` (Empty string for relative) | Frontend environment variable specifying backend FastAPI base URL. |
 
 ---
@@ -230,9 +233,11 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 - Set `DEV_MODE=false`.
 
 ### 3. Frontend Deployment (Vercel)
-- Link the repository to Vercel with Root Directory set to `frontend`.
+> [!IMPORTANT]
+> The root `vercel.json` has been removed. In the Vercel Project Settings, **Root Directory MUST be set to `frontend`**.
+- Link the repository to Vercel and configure the root directory as `frontend`.
 - Set Environment Variable: `VITE_API_BASE=https://your-backend-api.onrender.com`.
-- The included [`frontend/vercel.json`](file:///D:/projects/fordge5/fordge/frontend/vercel.json) automatically handles single-page routing:
+- The configuration in [`frontend/vercel.json`](file:///D:/projects/fordge5/fordge/frontend/vercel.json) handles single-page app routing:
 ```json
 {
   "rewrites": [

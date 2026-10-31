@@ -3,6 +3,8 @@ JWT authentication and role-based access control for Jan Aawaz.
 Supports 'citizen' and 'authority' roles with PyJWT.
 """
 import os
+import secrets
+import logging
 import jwt
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
@@ -12,13 +14,37 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-JWT_SECRET = os.getenv("JWT_SECRET", "janaawaz_hackathon_jwt_secret_key_2026_production")
+logger = logging.getLogger("auth")
+
+
+def _resolve_jwt_secret() -> str:
+    secret = os.getenv("JWT_SECRET")
+    is_dev = os.getenv("DEV_MODE", "false").lower() in ("true", "1", "yes")
+
+    if not secret or len(secret.strip()) < 32:
+        if is_dev:
+            generated = secrets.token_urlsafe(48)
+            logger.warning(
+                "SECURITY WARNING: JWT_SECRET is unset or shorter than 32 characters in DEV_MODE. "
+                "Generated an ephemeral per-process secret. For production or persistence, generate a secure key with: "
+                'python -c "import secrets; print(secrets.token_urlsafe(48))"'
+            )
+            return generated
+        raise RuntimeError(
+            "Fatal startup configuration error: JWT_SECRET environment variable is unset or shorter than 32 characters. "
+            'Please configure JWT_SECRET in your environment or backend/.env. '
+            'Generate a secure key with: python -c "import secrets; print(secrets.token_urlsafe(48))"'
+        )
+    return secret.strip()
+
+
+JWT_SECRET = _resolve_jwt_secret()
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 12
 
 
 def get_authority_emails() -> List[str]:
-    raw = os.getenv("AUTHORITY_EMAILS", "commissioner@delhi.gov.in,admin@janaawaz.in")
+    raw = os.getenv("AUTHORITY_EMAILS", "")
     return [e.strip().lower() for e in raw.split(",") if e.strip()]
 
 

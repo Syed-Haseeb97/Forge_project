@@ -1,6 +1,8 @@
 import os
 import random
 import smtplib
+import logging
+import httpx
 from datetime import datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -9,9 +11,25 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+logger = logging.getLogger("janaawaz.email")
+
+EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "smtp").lower().strip()
 GMAIL_USER = os.getenv("GMAIL_USER")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
-EMAIL_FROM = os.getenv("EMAIL_FROM") or (f"Jan Aawaz (जनAawaz) Portal <{GMAIL_USER}>" if GMAIL_USER else None)
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+
+DEFAULT_FROM = "Jan Aawaz (जनAawaz) Portal <onboarding@resend.dev>" if EMAIL_PROVIDER == "resend" else (
+    f"Jan Aawaz (जनAawaz) Portal <{GMAIL_USER}>" if GMAIL_USER else None
+)
+EMAIL_FROM = os.getenv("EMAIL_FROM") or DEFAULT_FROM
+
+
+def is_email_configured() -> bool:
+    """Return True if the selected email provider is fully configured with credentials."""
+    provider = os.getenv("EMAIL_PROVIDER", "smtp").lower().strip()
+    if provider == "resend":
+        return bool(os.getenv("RESEND_API_KEY"))
+    return bool(os.getenv("GMAIL_USER") and os.getenv("GMAIL_APP_PASSWORD"))
 
 # In-memory OTP storage: { normalized_email: { "code": str, "citizen_data": dict, "expires_at": datetime, "last_sent_at": datetime, "attempts": int } }
 _otp_store: Dict[str, Dict[str, Any]] = {}
@@ -144,19 +162,57 @@ def build_verification_html(code: str, email: str, title: str = "Verify your ema
 </html>"""
 
 
+def _send_via_resend(to_email: str, subject: str, plain_text: str, html_text: str) -> bool:
+    """Send transactional email via Resend REST API."""
+    if not RESEND_API_KEY:
+        logger.warning("[EmailService] Resend delivery disabled: RESEND_API_KEY not configured.")
+        return False
+
+    sender = EMAIL_FROM or "Jan Aawaz Portal <onboarding@resend.dev>"
+    try:
+        with httpx.Client(timeout=6.0) as client:
+            resp = client.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {RESEND_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "from": sender,
+                    "to": [to_email],
+                    "subject": subject,
+                    "html": html_text,
+                    "text": plain_text,
+                },
+            )
+            if resp.status_code in (200, 201):
+                return True
+            logger.error(f"[EmailService Resend] API error {resp.status_code}: {resp.text}")
+            return False
+    except Exception as e:
+        logger.error(f"[EmailService Resend Error] Failed to send email to {to_email}: {e}")
+        return False
+
+
 def send_verification_email(to_email: str, code: str, title: str = "Verify your email address", greeting: str = "") -> bool:
+    plain_text = f"Your Jan Aawaz (जनAawaz) citizen verification code is: {code}\nValid for 10 minutes."
+    html_text = build_verification_html(code, to_email, title=title, greeting=greeting)
+    subject = f"Jan Aawaz (जनAawaz) Verification Code: {code}"
+
+    # Route according to EMAIL_PROVIDER
+    if EMAIL_PROVIDER == "resend":
+        return _send_via_resend(to_email, subject, plain_text, html_text)
+
+    # Default: SMTP
     if not GMAIL_USER or not GMAIL_APP_PASSWORD:
-        print(f"[EmailService] Email delivery disabled: GMAIL_USER or GMAIL_APP_PASSWORD not set in environment.")
+        logger.info("[EmailService] Email delivery disabled: GMAIL_USER or GMAIL_APP_PASSWORD not set in environment.")
         return False
 
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"Jan Aawaz (जनAawaz) Verification Code: {code}"
+        msg["Subject"] = subject
         msg["From"] = EMAIL_FROM or f"Jan Aawaz Portal <{GMAIL_USER}>"
         msg["To"] = to_email
-
-        plain_text = f"Your Jan Aawaz (जनAawaz) citizen verification code is: {code}\nValid for 10 minutes."
-        html_text = build_verification_html(code, to_email, title=title, greeting=greeting)
 
         msg.attach(MIMEText(plain_text, "plain"))
         msg.attach(MIMEText(html_text, "html"))
@@ -167,23 +223,13 @@ def send_verification_email(to_email: str, code: str, title: str = "Verify your 
 
         return True
     except Exception as e:
-        print(f"[EmailService Error] Failed to send verification email to {to_email}: {e}")
+        logger.error(f"[EmailService Error] Failed to send verification email to {to_email}: {e}")
         return False
 
 
 def send_dispatch_email(to_email: str, subject: str, body_text: str) -> bool:
     """Send formal departmental dispatch or escalation notice."""
-    if not GMAIL_USER or not GMAIL_APP_PASSWORD:
-        print(f"[EmailService] Dispatch email skipped: SMTP credentials not set. Notice recorded in database.")
-        return False
-
-    try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = EMAIL_FROM or f"Jan Aawaz Dispatch Office <{GMAIL_USER}>"
-        msg["To"] = to_email
-
-        html_content = f"""<!DOCTYPE html>
+    html_content = f"""<!DOCTYPE html>
 <html>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f6f4ee; padding: 24px; color: #102a2f;">
   <div style="max-width: 650px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid rgba(23,62,66,0.15); overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.05);">
@@ -201,6 +247,19 @@ def send_dispatch_email(to_email: str, subject: str, body_text: str) -> bool:
 </body>
 </html>"""
 
+    if EMAIL_PROVIDER == "resend":
+        return _send_via_resend(to_email, subject, body_text, html_content)
+
+    if not GMAIL_USER or not GMAIL_APP_PASSWORD:
+        logger.info("[EmailService] Dispatch email skipped: SMTP credentials not set. Notice recorded in database.")
+        return False
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = EMAIL_FROM or f"Jan Aawaz Dispatch Office <{GMAIL_USER}>"
+        msg["To"] = to_email
+
         msg.attach(MIMEText(body_text, "plain"))
         msg.attach(MIMEText(html_content, "html"))
 
@@ -210,5 +269,5 @@ def send_dispatch_email(to_email: str, subject: str, body_text: str) -> bool:
 
         return True
     except Exception as e:
-        print(f"[EmailService Error] Failed to send dispatch email to {to_email}: {e}")
+        logger.error(f"[EmailService Error] Failed to send dispatch email to {to_email}: {e}")
         return False

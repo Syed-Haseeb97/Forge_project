@@ -30,6 +30,7 @@ from agent.watchdog import (
     stop_watchdog_background_task,
     run_watchdog_check,
     get_sla_time_scale,
+    is_watchdog_running,
 )
 from agent.verification import verify_repair_evidence
 from agent.explainer import generate_plain_language_explanation
@@ -42,6 +43,7 @@ from email_service import (
     get_stored_otp_data,
     send_verification_email,
     check_rate_limit,
+    is_email_configured,
 )
 from auth import (
     get_current_user,
@@ -106,6 +108,10 @@ async def health_check():
         "app": "Jan Aawaz (जनAawaz)",
         "version": "2.0.0",
         "database": db_status,
+        "gemini_configured": bool(os.getenv("GEMINI_API_KEY")),
+        "email_configured": is_email_configured(),
+        "watchdog_running": is_watchdog_running(),
+        "sla_time_scale": get_sla_time_scale(),
         "timestamp": datetime.utcnow().isoformat(),
     }
 
@@ -344,9 +350,7 @@ async def register_send_code(payload: RegisterSendCodeRequest):
 
     code = generate_and_store_otp(email, citizen_dict)
 
-    loop = asyncio.get_event_loop()
-    sent = await loop.run_in_executor(
-        None,
+    sent = await asyncio.to_thread(
         send_verification_email,
         email,
         code,
@@ -454,9 +458,7 @@ async def login_send_code(payload: LoginSendCodeRequest):
 
     code = generate_and_store_otp(email, {"citizen_id": citizen.id})
 
-    loop = asyncio.get_event_loop()
-    sent = await loop.run_in_executor(
-        None,
+    sent = await asyncio.to_thread(
         send_verification_email,
         email,
         code,

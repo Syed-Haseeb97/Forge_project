@@ -336,7 +336,7 @@ async def login_send_code(payload: LoginSendCodeRequest):
         if not citizen:
             raise HTTPException(
                 status_code=404,
-                detail="No registered citizen profile found with this email. Please sign up first.",
+                detail="This email is not registered. Want to create an account?",
             )
 
     code = generate_and_store_otp(email, {"citizen_id": citizen.id})

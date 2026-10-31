@@ -16,6 +16,7 @@ export default function AuthPage() {
 
   // Login form state
   const [loginEmail, setLoginEmail] = useState('')
+  const [unregisteredPrompt, setUnregisteredPrompt] = useState(null)
 
   // Signup form state
   const [signupForm, setSignupForm] = useState({
@@ -57,6 +58,7 @@ export default function AuthPage() {
     }
 
     setSending(true)
+    setUnregisteredPrompt(null)
     try {
       const { data } = await axios.post('/api/auth/login-send-code', { email: cleanEmail })
       toast.success(data.message || 'Verification code sent to your email!')
@@ -66,9 +68,8 @@ export default function AuthPage() {
       const status = err.response?.status
       const detail = err.response?.data?.detail
       if (status === 404) {
-        toast.error('No citizen profile found for this email. Please sign up first!')
-        setSignupForm(prev => ({ ...prev, email: cleanEmail }))
-        setMode('signup')
+        setUnregisteredPrompt(cleanEmail)
+        toast.error('This email is not registered. Want to create an account?', { duration: 5000 })
       } else {
         toast.error(detail || 'Failed to dispatch verification code')
       }
@@ -212,6 +213,7 @@ export default function AuthPage() {
                   onClick={() => {
                     setMode('login')
                     setStep('form')
+                    setUnregisteredPrompt(null)
                   }}
                   className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
                     mode === 'login'
@@ -226,6 +228,7 @@ export default function AuthPage() {
                   onClick={() => {
                     setMode('signup')
                     setStep('form')
+                    setUnregisteredPrompt(null)
                   }}
                   className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
                     mode === 'signup'
@@ -269,12 +272,53 @@ export default function AuthPage() {
                     type="email"
                     autoFocus
                     value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
+                    onChange={(e) => {
+                      setLoginEmail(e.target.value)
+                      if (unregisteredPrompt) setUnregisteredPrompt(null)
+                    }}
                     placeholder="citizen@example.com"
                     className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] py-3.5 pl-11 pr-4 text-sm text-[#0d3035] dark:text-[#f6f4ee] outline-none placeholder:text-[#95a5a3] focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition"
                   />
                 </div>
               </div>
+
+              {/* Unregistered Email Warning Card */}
+              {unregisteredPrompt && (
+                <div className="rounded-xl border border-[#bd7f23]/40 bg-[#fffaf0] dark:bg-[#1f1708] p-4 text-xs text-[#0d3035] dark:text-[#f6f4ee] shadow-sm animate-fadeIn">
+                  <div className="flex items-start gap-3">
+                    <CivicIcon name="alert" size={18} className="text-[#ba7c29] shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-bold text-sm text-[#0d3035] dark:text-[#f6f4ee]">
+                        This email is not registered.
+                      </p>
+                      <p className="mt-1 text-[#6e7d7a] dark:text-[#95a9a6] text-xs leading-relaxed">
+                        No citizen profile was found for <strong className="text-[#0d3035] dark:text-[#f6f4ee]">{unregisteredPrompt}</strong>. Want to create an account?
+                      </p>
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSignupForm(prev => ({ ...prev, email: unregisteredPrompt }))
+                            setUnregisteredPrompt(null)
+                            setMode('signup')
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-[#0d3035] dark:bg-[#e8b855] text-white dark:text-[#0d3035] px-3.5 py-2 text-xs font-bold hover:bg-[#16444a] dark:hover:bg-[#efc56b] transition shadow-sm"
+                        >
+                          <span>Yes, create account</span>
+                          <CivicIcon name="arrow" size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setUnregisteredPrompt(null)}
+                          className="rounded-lg border border-[#173e42]/20 dark:border-white/10 px-3 py-2 text-xs font-medium text-[#687976] dark:text-[#95a9a6] hover:bg-black/5 dark:hover:bg-white/5 transition"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <button
                 type="submit"

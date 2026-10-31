@@ -25,6 +25,7 @@ export default function SubmitReport() {
   const [submitting, setSubmitting] = useState(false)
   const [autofilling, setAutofilling] = useState(false)
   const [locating, setLocating] = useState(false)
+  const [mapCenter, setMapCenter] = useState(null)
   const [nearbyReports, setNearbyReports] = useState([])
   const [checkingNearby, setCheckingNearby] = useState(false)
 
@@ -32,20 +33,14 @@ export default function SubmitReport() {
   const fileInputRef = useRef(null)
   const audioInputRef = useRef(null)
 
-  // Auto-acquire current location if granted by browser
+  // Auto-acquire current location if granted by browser to CENTER the map only (does NOT drop pin)
   useEffect(() => {
-    if (!form.latitude && !form.longitude && navigator.geolocation) {
+    if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const lat = Number(pos.coords.latitude.toFixed(6))
           const lng = Number(pos.coords.longitude.toFixed(6))
-          setForm(f => {
-            if (!f.latitude && !f.longitude) {
-              return { ...f, latitude: String(lat), longitude: String(lng) }
-            }
-            return f
-          })
-          checkProximityDuplicates(lat, lng)
+          setMapCenter([lat, lng])
         },
         () => {
           // Geolocation not granted; remains centered on neutral India-wide view
@@ -55,7 +50,7 @@ export default function SubmitReport() {
     }
   }, [])
 
-  // Use browser GPS manually
+  // Use browser GPS manually (sets coordinates and drops pin)
   const useMyLocation = () => {
     if (!navigator.geolocation) {
       toast.error('Geolocation is not supported by your browser')
@@ -66,6 +61,7 @@ export default function SubmitReport() {
       (pos) => {
         const lat = Number(pos.coords.latitude.toFixed(6))
         const lng = Number(pos.coords.longitude.toFixed(6))
+        setMapCenter([lat, lng])
         setForm(f => ({ ...f, latitude: String(lat), longitude: String(lng) }))
         setLocating(false)
         toast.success('Current location acquired')
@@ -107,6 +103,7 @@ export default function SubmitReport() {
   }, [form.latitude, form.longitude])
 
   const handleMapPositionSelect = ({ latitude, longitude }) => {
+    setMapCenter([latitude, longitude])
     setForm(f => ({
       ...f,
       latitude: String(latitude),
@@ -567,12 +564,17 @@ export default function SubmitReport() {
                     </div>
                     <CivicMap
                       interactivePicker={true}
+                      center={mapCenter}
                       selectedPosition={mapSelectedPos}
                       onPositionSelect={handleMapPositionSelect}
                       height="200px"
-                      zoom={hasCoordinates ? 14 : 5}
+                      zoom={hasCoordinates ? 14 : (mapCenter ? 13 : 5)}
                     />
                   </div>
+                  <p className="mt-1.5 text-[11px] text-[#6d7e7c] dark:text-[#8ea5a2] flex items-center gap-1.5">
+                    <CivicIcon name="location" size={13} className="text-[#ba7c29]" />
+                    <span>Tap the map to drop a pin on the exact spot.</span>
+                  </p>
 
                   {/* Proximity duplicate warnings */}
                   {nearbyReports.length > 0 && (

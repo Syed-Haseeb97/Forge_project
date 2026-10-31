@@ -92,18 +92,21 @@ export default function CivicMap({
   height = '420px',
   interactivePicker = false,
   zoom = 13,
+  center = null,
 }) {
   const validReports = reports.filter(r => r.latitude && r.longitude)
   const activeHotspots = Array.isArray(hotspotCircles)
     ? hotspotCircles
     : (hotspots && hotspots.length > 0 ? hotspots : [])
 
-  // Center on selectedPosition if set, or average of valid reports, or neutral India-wide center
+  // Center on selectedPosition if set, or center prop (when no selectedPosition), or average of valid reports, or neutral India-wide center
   let defaultCenter = [20.5937, 78.9629]
-  let effectiveZoom = zoom !== undefined ? zoom : (selectedPosition && selectedPosition[0] ? 14 : 5)
+  let effectiveZoom = zoom !== undefined ? zoom : (selectedPosition && selectedPosition[0] ? 14 : (center && center[0] ? 13 : 5))
 
   if (selectedPosition && selectedPosition[0] && selectedPosition[1]) {
     defaultCenter = selectedPosition
+  } else if (center && center[0] && center[1]) {
+    defaultCenter = center
   } else if (validReports.length > 0) {
     const avgLat = validReports.reduce((s, r) => s + r.latitude, 0) / validReports.length
     const avgLng = validReports.reduce((s, r) => s + r.longitude, 0) / validReports.length

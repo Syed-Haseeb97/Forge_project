@@ -333,7 +333,15 @@ export default function Dashboard() {
                       <button
                         onClick={() => {
                           setSubmittedReport(null)
-                          setQuickForm({ title: '', category: 'road_damage', description: '', location: '' })
+                          setQuickForm({
+                            title: '',
+                            category: 'road_damage',
+                            description: '',
+                            location: '',
+                            latitude: '',
+                            longitude: '',
+                          })
+                          setQuickFile(null)
                         }}
                         className="btn-secondary text-xs"
                       >

@@ -732,6 +732,7 @@ export default function ReportDetail() {
                     <div className="divide-y divide-[#173e42]/10 dark:divide-white/10 rounded-xl border border-[#173e42]/10 dark:border-white/10 bg-[#f8f8f4] dark:bg-[#06181b] overflow-hidden">
                       {traceSteps.map((step, idx) => {
                         const isFallback = step.status === 'fallback'
+                        const isDegraded = step.status === 'degraded'
                         const isSuccess = step.status === 'success'
                         const isError = step.status === 'error'
                         return (
@@ -762,6 +763,8 @@ export default function ReportDetail() {
                               <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                                 isSuccess
                                   ? 'bg-[#e3f0ea] dark:bg-[#123830] text-[#2f7661] dark:text-[#70b99e]'
+                                  : isDegraded
+                                  ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/50'
                                   : isFallback
                                   ? 'bg-[#fff4dd] dark:bg-amber-950/60 text-[#94611b] dark:text-amber-300'
                                   : isError

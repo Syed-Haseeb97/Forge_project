@@ -5,15 +5,33 @@ All external calls:
 - Try/except with graceful degradation
 - Caching & rate limiting where required
 """
+import os
 import math
 import time
 import asyncio
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 import httpx
 from sqlalchemy import select, and_
 
 logger = logging.getLogger("janaawaz.agent.tools")
+
+DEFAULT_OVERPASS_URLS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+]
+
+def _get_overpass_urls() -> List[str]:
+    raw = os.getenv("OVERPASS_URLS", "")
+    if raw.strip():
+        urls = [u.strip() for u in raw.split(",") if u.strip()]
+        if urls:
+            return urls
+    return DEFAULT_OVERPASS_URLS
+
+# 10-minute in-memory cache for Overpass API: (rounded_lat, rounded_lon) -> (result, timestamp)
+_OVERPASS_CACHE: Dict[Tuple[float, float], Tuple[Dict[str, Any], float]] = {}
+_OVERPASS_CACHE_TTL = 600.0  # 10 minutes
 
 # In-memory cache for reverse geocoding: (rounded_lat, rounded_lon) -> result
 _GEOCODE_CACHE: Dict[tuple, Dict[str, Any]] = {}
@@ -29,7 +47,7 @@ async def reverse_geocode(lat: Optional[float], lon: Optional[float]) -> Dict[st
     - Enforces max 1 request/second to respect OpenStreetMap usage policy
     """
     if lat is None or lon is None:
-        return {"locality": None, "road": None, "city": None, "display_name": None}
+        return {"locality": None, "road": None, "city": None, "display_name": None, "degraded": True}
 
     cache_key = (round(float(lat), 3), round(float(lon), 3))
     if cache_key in _GEOCODE_CACHE:
@@ -73,6 +91,7 @@ async def reverse_geocode(lat: Optional[float], lon: Optional[float]) -> Dict[st
                         "road": road,
                         "city": city,
                         "display_name": data.get("display_name"),
+                        "degraded": False,
                     }
                     _GEOCODE_CACHE[cache_key] = result
                     return result
@@ -80,7 +99,7 @@ async def reverse_geocode(lat: Optional[float], lon: Optional[float]) -> Dict[st
             logger.warning(f"Nominatim reverse geocode degraded gracefully: {e}")
 
     # Fallback default
-    fallback_res = {"locality": None, "road": None, "city": None, "display_name": None}
+    fallback_res = {"locality": None, "road": None, "city": None, "display_name": None, "degraded": True}
     _GEOCODE_CACHE[cache_key] = fallback_res
     return fallback_res
 
@@ -93,6 +112,7 @@ async def get_weather(lat: Optional[float], lon: Optional[float]) -> Dict[str, A
             "max_precip_probability_24h": 0,
             "heavy_rain_risk": False,
             "summary": "Weather unavailable (no coordinates provided)",
+            "degraded": True,
         }
 
     url = "https://api.open-meteo.com/v1/forecast"
@@ -130,6 +150,7 @@ async def get_weather(lat: Optional[float], lon: Optional[float]) -> Dict[str, A
                     "max_precip_probability_24h": int(max_prob),
                     "heavy_rain_risk": heavy_rain,
                     "summary": summary,
+                    "degraded": False,
                 }
     except Exception as e:
         logger.warning(f"Open-Meteo weather check degraded gracefully: {e}")
@@ -139,13 +160,23 @@ async def get_weather(lat: Optional[float], lon: Optional[float]) -> Dict[str, A
         "max_precip_probability_24h": 0,
         "heavy_rain_risk": False,
         "summary": "Weather data temporarily unavailable",
+        "degraded": True,
     }
 
 
 async def get_sensitive_sites(lat: Optional[float], lon: Optional[float], radius_m: int = 250) -> Dict[str, Any]:
-    """Query Overpass API for schools, hospitals, clinics, colleges, bus stations within radius_m."""
+    """Query Overpass API for schools, hospitals, clinics, colleges, bus stations within radius_m.
+    Tries endpoints in OVERPASS_URLS in order, with 10-minute cache on rounded coordinates.
+    """
     if lat is None or lon is None:
-        return {"count": 0, "sites": [], "summary": "No coordinates provided for sensitive site analysis"}
+        return {"count": 0, "sites": [], "summary": "No coordinates provided for sensitive site analysis", "degraded": True}
+
+    cache_key = (round(float(lat), 3), round(float(lon), 3))
+    now = time.time()
+    if cache_key in _OVERPASS_CACHE:
+        cached_val, cached_time = _OVERPASS_CACHE[cache_key]
+        if now - cached_time < _OVERPASS_CACHE_TTL:
+            return cached_val
 
     query = f"""[out:json][timeout:5];
 (
@@ -154,56 +185,62 @@ async def get_sensitive_sites(lat: Optional[float], lon: Optional[float], radius
 );
 out center tags;"""
 
-    url = "https://overpass-api.de/api/interpreter"
+    urls = _get_overpass_urls()
+    for endpoint_url in urls:
+        try:
+            async with httpx.AsyncClient(timeout=5.5) as client:
+                res = await client.post(endpoint_url, data={"data": query})
+                if res.status_code == 200:
+                    data = res.json()
+                    elements = data.get("elements", [])
+                    sites: List[Dict[str, Any]] = []
 
-    try:
-        async with httpx.AsyncClient(timeout=5.8) as client:
-            res = await client.post(url, data={"data": query})
-            if res.status_code == 200:
-                data = res.json()
-                elements = data.get("elements", [])
-                sites: List[Dict[str, Any]] = []
+                    for el in elements:
+                        tags = el.get("tags", {})
+                        amenity = tags.get("amenity", "sensitive_site")
+                        name = tags.get("name") or tags.get("name:en") or f"Unnamed {amenity.replace('_', ' ').capitalize()}"
+                        
+                        el_lat = el.get("lat") or el.get("center", {}).get("lat")
+                        el_lon = el.get("lon") or el.get("center", {}).get("lon")
+                        dist_m = None
+                        if el_lat and el_lon:
+                            dist_m = round(_haversine_distance(lat, lon, el_lat, el_lon))
 
-                for el in elements:
-                    tags = el.get("tags", {})
-                    amenity = tags.get("amenity", "sensitive_site")
-                    name = tags.get("name") or tags.get("name:en") or f"Unnamed {amenity.replace('_', ' ').capitalize()}"
-                    
-                    # Calculate approximate distance if center/coordinates exist
-                    el_lat = el.get("lat") or el.get("center", {}).get("lat")
-                    el_lon = el.get("lon") or el.get("center", {}).get("lon")
-                    dist_m = None
-                    if el_lat and el_lon:
-                        dist_m = round(_haversine_distance(lat, lon, el_lat, el_lon))
+                        sites.append({
+                            "type": amenity,
+                            "name": name,
+                            "distance_m": dist_m,
+                        })
 
-                    sites.append({
-                        "type": amenity,
-                        "name": name,
-                        "distance_m": dist_m,
-                    })
+                    count = len(sites)
+                    if count > 0:
+                        names_str = ", ".join([f"{s['name']} ({s['type']})" for s in sites[:3]])
+                        if count > 3:
+                            names_str += f", and {count - 3} more"
+                        summary = f"{count} sensitive site(s) within {radius_m}m: {names_str}"
+                    else:
+                        summary = f"No schools, hospitals, or transit hubs within {radius_m}m"
 
-                count = len(sites)
-                if count > 0:
-                    names_str = ", ".join([f"{s['name']} ({s['type']})" for s in sites[:3]])
-                    if count > 3:
-                        names_str += f", and {count - 3} more"
-                    summary = f"{count} sensitive site(s) within {radius_m}m: {names_str}"
-                else:
-                    summary = f"No schools, hospitals, or transit hubs within {radius_m}m"
+                    result = {
+                        "count": count,
+                        "sites": sites,
+                        "summary": summary,
+                        "degraded": False,
+                    }
+                    _OVERPASS_CACHE[cache_key] = (result, now)
+                    return result
+        except Exception as e:
+            logger.warning(f"Overpass sensitive sites query failed on {endpoint_url}: {e}")
 
-                return {
-                    "count": count,
-                    "sites": sites,
-                    "summary": summary,
-                }
-    except Exception as e:
-        logger.warning(f"Overpass sensitive sites query degraded gracefully: {e}")
-
-    return {
+    # Fallback default if all URLs fail
+    fallback_res = {
         "count": 0,
         "sites": [],
         "summary": "Sensitive sites lookup timed out or returned no records",
+        "degraded": True,
     }
+    _OVERPASS_CACHE[cache_key] = (fallback_res, now)
+    return fallback_res
 
 
 def _haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -226,7 +263,7 @@ async def get_recurrence(
 ) -> Dict[str, Any]:
     """Check database for existing open or in-progress reports in the same category within radius_m."""
     if lat is None or lon is None or session is None:
-        return {"count": 0, "radius_m": radius_m, "category": category, "summary": "No recurrence check possible"}
+        return {"count": 0, "radius_m": radius_m, "category": category, "summary": "No recurrence check possible", "degraded": True}
 
     try:
         from models import Report, StatusEnum
@@ -259,7 +296,8 @@ async def get_recurrence(
             "radius_m": radius_m,
             "category": category,
             "summary": summary,
+            "degraded": False,
         }
     except Exception as e:
         logger.warning(f"Recurrence check degraded gracefully: {e}")
-        return {"count": 0, "radius_m": radius_m, "category": category, "summary": "Recurrence check unavailable"}
+        return {"count": 0, "radius_m": radius_m, "category": category, "summary": "Recurrence check unavailable", "degraded": True}

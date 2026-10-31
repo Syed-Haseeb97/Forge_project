@@ -120,13 +120,16 @@ async def draft_and_send_dispatch(
 
                 for model_name in models:
                     try:
-                        resp = await client.aio.models.generate_content(
-                            model=model_name,
-                            contents=prompt,
-                            config=types.GenerateContentConfig(
-                                response_mime_type="application/json",
-                                response_schema=DispatchDraft,
+                        resp = await asyncio.wait_for(
+                            client.aio.models.generate_content(
+                                model=model_name,
+                                contents=prompt,
+                                config=types.GenerateContentConfig(
+                                    response_mime_type="application/json",
+                                    response_schema=DispatchDraft,
+                                ),
                             ),
+                            timeout=12.0,
                         )
                         if resp.text:
                             draft_res = DispatchDraft.model_validate_json(resp.text)

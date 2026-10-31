@@ -213,13 +213,16 @@ async def verify_repair_evidence(
 
         for model_name in models:
             try:
-                resp = await client.aio.models.generate_content(
-                    model=model_name,
-                    contents=prompt_parts,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=ResolutionVerification,
+                resp = await asyncio.wait_for(
+                    client.aio.models.generate_content(
+                        model=model_name,
+                        contents=prompt_parts,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=ResolutionVerification,
+                        ),
                     ),
+                    timeout=12.0,
                 )
                 if resp.text:
                     verif = ResolutionVerification.model_validate_json(resp.text)

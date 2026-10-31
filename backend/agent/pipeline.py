@@ -12,6 +12,7 @@ Orchestrates multi-step civic triage:
 import os
 import time
 import json
+import asyncio
 import logging
 from typing import Optional, Dict, Any, List
 from google import genai
@@ -86,6 +87,46 @@ def _clamp_severity(evidence_sev: str, decided_sev: str) -> str:
         return SEVERITY_LEVELS[idx_ev - 1]
 
 
+def _fallback_triage_result(
+    title: str,
+    category: str,
+    description: str,
+    location: str,
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+) -> Dict[str, Any]:
+    from gemini_service import _fallback_triage
+    fb = _fallback_triage(title, description, category)
+    final_sev = fb["severity"]
+    sla = DEFAULT_SLA_MAP.get(final_sev, 72)
+    dept = fb.get("suggested_department", ROUTING_MAP.get(category, "General Administration"))
+    trace = [
+        {
+            "step": "pipeline_budget",
+            "tool": "pipeline_budget_guardian",
+            "status": "fallback",
+            "duration_ms": 30000,
+            "summary": "Pipeline execution exceeded 30s budget; deterministic safety heuristic applied",
+            "data": {"severity": final_sev, "department": dept, "sla_hours": sla},
+        }
+    ]
+    return {
+        "ai_analysis": f"Preliminary evidence triage ({final_sev.upper()}).\n\n**Rationale:** Applied rule-based civic safety heuristic following pipeline budget constraint.\n\n**Recommended Action:** {fb['recommended_action']}",
+        "severity": final_sev,
+        "action_plan": fb["recommended_action"],
+        "safety_precautions": fb["safety_precautions"],
+        "sla_hours": sla,
+        "routed_to": dept,
+        "agent_trace": trace,
+        "confidence": 0.65,
+        "severity_rationale": "Safety heuristic fallback applied within statutory response budget.",
+        "detected_language": "English",
+        "locality": location,
+        "visible_hazards": ["Unverified field report requiring departmental physical inspection"],
+        "evidence_severity": final_sev,
+    }
+
+
 async def run_agent_pipeline(
     title: str,
     description: str,
@@ -97,7 +138,46 @@ async def run_agent_pipeline(
     media_mime: Optional[str] = None,
     db_session=None,
 ) -> Dict[str, Any]:
-    """Execute the full agentic civic grievance triage pipeline."""
+    """Execute the full agentic civic grievance triage pipeline within a 30s budget."""
+    try:
+        return await asyncio.wait_for(
+            _execute_agent_pipeline(
+                title=title,
+                description=description,
+                category=category,
+                location=location,
+                latitude=latitude,
+                longitude=longitude,
+                media_bytes=media_bytes,
+                media_mime=media_mime,
+                db_session=db_session,
+            ),
+            timeout=30.0,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(f"run_agent_pipeline timed out after 30s budget for report '{title}'")
+        return _fallback_triage_result(
+            title=title,
+            category=category,
+            description=description,
+            location=location,
+            latitude=latitude,
+            longitude=longitude,
+        )
+
+
+async def _execute_agent_pipeline(
+    title: str,
+    description: str,
+    category: str,
+    location: str = "Unspecified",
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+    media_bytes: Optional[bytes] = None,
+    media_mime: Optional[str] = None,
+    db_session=None,
+) -> Dict[str, Any]:
+    """Internal step execution for the agentic triage pipeline."""
     trace: List[Dict[str, Any]] = []
     client = _get_client()
     models = _get_models()
@@ -137,13 +217,16 @@ async def run_agent_pipeline(
         for model_name in models:
             try:
                 t_sub0 = time.time()
-                resp = await client.aio.models.generate_content(
-                    model=model_name,
-                    contents=prompt_parts,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=EvidenceAnalysis,
+                resp = await asyncio.wait_for(
+                    client.aio.models.generate_content(
+                        model=model_name,
+                        contents=prompt_parts,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=EvidenceAnalysis,
+                        ),
                     ),
+                    timeout=12.0,
                 )
                 dur = int((time.time() - t_sub0) * 1000)
                 if resp.text:
@@ -193,12 +276,13 @@ async def run_agent_pipeline(
         geocode_res = await reverse_geocode(latitude, longitude)
         dur = int((time.time() - t0) * 1000)
         loc_str = geocode_res.get("locality") or geocode_res.get("road") or geocode_res.get("city") or location
+        status = "degraded" if geocode_res.get("degraded") else ("success" if geocode_res.get("locality") or geocode_res.get("city") else "skipped")
         trace.append({
             "step": "reverse_geocode",
             "tool": "nominatim_osm",
-            "status": "success" if geocode_res.get("locality") or geocode_res.get("city") else "skipped",
+            "status": status,
             "duration_ms": dur,
-            "summary": f"Resolved location to {loc_str}",
+            "summary": f"Resolved location to {loc_str}" if not geocode_res.get("degraded") else "Reverse geocoding unavailable",
             "data": geocode_res,
         })
     except Exception as e:
@@ -206,10 +290,10 @@ async def run_agent_pipeline(
         trace.append({
             "step": "reverse_geocode",
             "tool": "nominatim_osm",
-            "status": "error",
+            "status": "degraded",
             "duration_ms": dur,
             "summary": f"Geocoding degraded: {e}",
-            "data": {"locality": None},
+            "data": {"locality": None, "degraded": True},
         })
 
     # -------------------------------------------------------------
@@ -219,10 +303,11 @@ async def run_agent_pipeline(
     try:
         weather_res = await get_weather(latitude, longitude)
         dur = int((time.time() - t0) * 1000)
+        status = "degraded" if weather_res.get("degraded") else "success"
         trace.append({
             "step": "weather",
             "tool": "open_meteo",
-            "status": "success",
+            "status": status,
             "duration_ms": dur,
             "summary": weather_res.get("summary", "Weather checked"),
             "data": weather_res,
@@ -232,7 +317,7 @@ async def run_agent_pipeline(
         trace.append({
             "step": "weather",
             "tool": "open_meteo",
-            "status": "error",
+            "status": "degraded",
             "duration_ms": dur,
             "summary": f"Weather fetch degraded: {e}",
             "data": weather_res,
@@ -245,10 +330,11 @@ async def run_agent_pipeline(
     try:
         sites_res = await get_sensitive_sites(latitude, longitude, radius_m=250)
         dur = int((time.time() - t0) * 1000)
+        status = "degraded" if sites_res.get("degraded") else ("success" if sites_res.get("count", 0) > 0 else "skipped")
         trace.append({
             "step": "sensitive_sites",
             "tool": "overpass_osm",
-            "status": "success" if sites_res.get("count", 0) > 0 else "skipped",
+            "status": status,
             "duration_ms": dur,
             "summary": sites_res.get("summary", "Sensitive sites evaluated"),
             "data": sites_res,
@@ -258,7 +344,7 @@ async def run_agent_pipeline(
         trace.append({
             "step": "sensitive_sites",
             "tool": "overpass_osm",
-            "status": "error",
+            "status": "degraded",
             "duration_ms": dur,
             "summary": f"Sensitive sites scan degraded: {e}",
             "data": sites_res,
@@ -271,10 +357,11 @@ async def run_agent_pipeline(
     try:
         recurrence_res = await get_recurrence(latitude, longitude, category, session=db_session, radius_m=300)
         dur = int((time.time() - t0) * 1000)
+        status = "degraded" if recurrence_res.get("degraded") else "success"
         trace.append({
             "step": "recurrence",
             "tool": "municipal_database",
-            "status": "success",
+            "status": status,
             "duration_ms": dur,
             "summary": recurrence_res.get("summary", "Recurrence evaluated"),
             "data": recurrence_res,
@@ -284,7 +371,7 @@ async def run_agent_pipeline(
         trace.append({
             "step": "recurrence",
             "tool": "municipal_database",
-            "status": "error",
+            "status": "degraded",
             "duration_ms": dur,
             "summary": f"Recurrence lookup degraded: {e}",
             "data": recurrence_res,
@@ -327,13 +414,16 @@ async def run_agent_pipeline(
         for model_name in models:
             try:
                 t_sub0 = time.time()
-                resp = await client.aio.models.generate_content(
-                    model=model_name,
-                    contents=decision_prompt,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=TriageDecision,
+                resp = await asyncio.wait_for(
+                    client.aio.models.generate_content(
+                        model=model_name,
+                        contents=decision_prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=TriageDecision,
+                        ),
                     ),
+                    timeout=12.0,
                 )
                 dur = int((time.time() - t_sub0) * 1000)
                 if resp.text:
@@ -400,8 +490,12 @@ async def run_agent_pipeline(
             "data": decision_res.model_dump(),
         })
 
-    # Compile unified analysis text for backward compatibility
-    full_analysis = f"{decision_res.action_plan}\n\n**Recommended Action:** {decision_res.action_plan}"
+    # Compile unified analysis text: evidence summary plus rationale and action plan
+    full_analysis = (
+        f"{evidence_res.issue_type} ({evidence_res.evidence_severity.upper()} evidence severity).\n\n"
+        f"**Rationale:** {decision_res.rationale}\n\n"
+        f"**Recommended Action:** {decision_res.action_plan}"
+    )
 
     return {
         "ai_analysis": full_analysis,
@@ -451,13 +545,16 @@ async def prefill_from_media(
 
         for model_name in models:
             try:
-                resp = await client.aio.models.generate_content(
-                    model=model_name,
-                    contents=prompt_parts,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=PrefillSuggestion,
+                resp = await asyncio.wait_for(
+                    client.aio.models.generate_content(
+                        model=model_name,
+                        contents=prompt_parts,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=PrefillSuggestion,
+                        ),
                     ),
+                    timeout=12.0,
                 )
                 if resp.text:
                     prefill = PrefillSuggestion.model_validate_json(resp.text)

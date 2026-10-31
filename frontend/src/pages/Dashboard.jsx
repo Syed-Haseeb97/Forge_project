@@ -125,7 +125,7 @@ export default function Dashboard() {
             </h1>
 
             <p className="mt-7 max-w-xl text-base leading-7 text-[#536866] dark:text-[#95a9a6] sm:text-lg">
-              Share visual or audio evidence of local problems. CivicLine’s multimodal AI understands what happened, evaluates the priority level, and forwards it to the responsible authority.
+              Share visual or audio evidence of local problems. Jan Aawaz’s multimodal AI understands what happened, evaluates the priority level, and forwards it to the responsible authority.
             </p>
 
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -707,10 +707,11 @@ export default function Dashboard() {
       <footer id="help" className="rounded-[26px] bg-[#08272b] px-6 py-10 text-white/60">
         <div className="max-w-[1240px] mx-auto flex flex-col items-center justify-between gap-6 text-center text-xs sm:flex-row sm:text-left">
           <div className="flex items-center gap-3 text-white">
-            <div className="flex size-8 items-center justify-center rounded-full border border-[#e8b855]/40 text-[#e8b855]">
-              <CivicIcon name="shield" size={17} />
-            </div>
-            <span className="font-serif text-lg font-bold">CivicLine</span>
+            <img
+              src="/logo-dark.jpg"
+              alt="जनAawaz"
+              className="h-8 w-auto object-contain rounded"
+            />
           </div>
           <p>Emergency? Please contact emergency public safety dispatch immediately.</p>
           <div className="flex gap-5 text-white/80">

@@ -29,12 +29,13 @@ export default function Footer() {
       <div className="bg-[#08272b] px-5 py-10 text-white/60 lg:px-8">
         <div className="mx-auto flex max-w-[1240px] flex-col items-center justify-between gap-6 text-center text-xs sm:flex-row sm:text-left">
           <div className="flex items-center gap-3 text-white">
-            <div className="flex size-9 items-center justify-center rounded-full border border-[#e8b855]/40 bg-[#0d3035] text-[#e8b855]">
-              <CivicIcon name="shield" size={18} />
-            </div>
+            <img
+              src="/logo-dark.jpg"
+              alt="जनAawaz"
+              className="h-9 w-auto object-contain rounded-md"
+            />
             <div>
-              <span className="font-serif text-lg font-bold tracking-tight">CivicLine</span>
-              <span className="block text-[9px] font-bold tracking-[0.16em] uppercase text-white/40">
+              <span className="block text-[9px] font-bold tracking-[0.16em] uppercase text-white/50">
                 STATUTORY PUBLIC GRIEVANCE REGISTRY
               </span>
             </div>
@@ -52,7 +53,7 @@ export default function Footer() {
           </div>
         </div>
         <div className="mx-auto mt-8 max-w-[1240px] border-t border-white/10 pt-5 text-center text-[10px] text-white/35 sm:flex sm:justify-between sm:text-left">
-          <p>© 2026 CivicLine Public Service Infrastructure. All citizen submissions protected under digital public record charters.</p>
+          <p>© 2026 Jan Aawaz (जनAawaz) Public Service Infrastructure. All citizen submissions protected under digital public record charters.</p>
           <p className="mt-1 sm:mt-0">Powered by Gemini AI Multimodal Triage & Open GIS</p>
         </div>
       </div>

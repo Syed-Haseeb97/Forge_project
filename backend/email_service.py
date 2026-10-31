@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional
 
 GMAIL_USER = os.getenv("GMAIL_USER", "syed424893@gmail.com")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "eeyi tjub jsvy yehk")
-EMAIL_FROM = os.getenv("EMAIL_FROM", "CivicLine Public Grievance Portal <syed424893@gmail.com>")
+EMAIL_FROM = os.getenv("EMAIL_FROM", "Jan Aawaz Public Portal <syed424893@gmail.com>")
 
 # In-memory OTP storage: { normalized_email: { "code": str, "citizen_data": dict, "expires_at": datetime, "attempts": int } }
 _otp_store: Dict[str, Dict[str, Any]] = {}
@@ -116,7 +116,7 @@ def build_verification_html(code: str, email: str, title: str = "Verify your ema
     <!-- Footer -->
     <tr>
       <td style="background-color: #08272b; padding: 16px 32px; text-align: center; color: rgba(255, 255, 255, 0.5); font-size: 10px;">
-        © 2026 CivicLine Public Grievance & Infrastructure Portal
+        © 2026 Jan Aawaz (जनAawaz) Public Grievance & Infrastructure Portal
       </td>
     </tr>
   </table>
@@ -127,11 +127,11 @@ def build_verification_html(code: str, email: str, title: str = "Verify your ema
 def send_verification_email(to_email: str, code: str, title: str = "Verify your email address", greeting: str = "") -> bool:
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"CivicLine Verification Code: {code}"
+        msg["Subject"] = f"जनAawaz Verification Code: {code}"
         msg["From"] = EMAIL_FROM
         msg["To"] = to_email
 
-        plain_text = f"Your CivicLine citizen verification code is: {code}\nValid for 10 minutes."
+        plain_text = f"Your Jan Aawaz (जनAawaz) citizen verification code is: {code}\nValid for 10 minutes."
         html_text = build_verification_html(code, to_email, title=title, greeting=greeting)
 
         msg.attach(MIMEText(plain_text, "plain"))

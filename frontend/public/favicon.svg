@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="badgeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0d3035" />
+      <stop offset="100%" stop-color="#05171a" />
+    </linearGradient>
+  </defs>
+  <!-- Background Badge -->
+  <rect width="64" height="64" rx="16" fill="url(#badgeGrad)" />
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="none" stroke="#ba7c29" stroke-width="2.5" stroke-opacity="0.85" />
+  <!-- 'जन' in Hindi (Devanagari) -->
+  <text 
+    x="32" 
+    y="44" 
+    font-family="'Nirmala UI', 'Mangal', 'Segoe UI', 'Noto Sans Devanagari', sans-serif" 
+    font-weight="900" 
+    font-size="34" 
+    fill="#e8b855" 
+    text-anchor="middle"
+    letter-spacing="-1"
+  >जन</text>
+</svg>

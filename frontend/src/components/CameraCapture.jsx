@@ -325,7 +325,7 @@ export default function CameraCapture({ onCapture, onClear, currentPreview = nul
                     <div className="size-1.5 bg-[#e8b855] rounded-full animate-ping" />
                   </div>
                   <div className="text-[10px] font-mono text-white/50 text-right">
-                    CivicLine Public Infrastructure Record
+                    Jan Aawaz (जनAawaz) Public Infrastructure Record
                   </div>
                 </div>
               </>

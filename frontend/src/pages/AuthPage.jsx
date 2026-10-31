@@ -255,7 +255,7 @@ export default function AuthPage() {
             {step === 'otp'
               ? 'Enter Verification Code'
               : mode === 'login'
-              ? 'Sign in to CivicLine'
+              ? 'Sign in to Jan Aawaz'
               : 'Create Citizen Profile'}
           </h1>
 

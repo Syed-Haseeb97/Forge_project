@@ -173,7 +173,7 @@ export default function ReportDetail() {
   const isCritical = report.severity === 'critical'
   const isHigh = report.severity === 'high'
   const [analysisText, recommendedActionText] = (report.ai_analysis || '').split('**Recommended Action:**')
-  const referenceCode = `CL-2026-${String(report.id).padStart(5, '0')}`
+  const referenceCode = `JA-2026-${String(report.id).padStart(5, '0')}`
 
   return (
     <div className="min-h-screen bg-[#f6f4ee] dark:bg-[#06181b] text-[#102a2f] dark:text-[#f6f4ee] transition-colors py-8 sm:py-12">

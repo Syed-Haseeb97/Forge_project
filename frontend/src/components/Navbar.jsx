@@ -23,8 +23,17 @@ export default function Navbar() {
   return (
     <>
       {/* Official Banner Top Strip */}
-      <div className="bg-[#0d3035] px-5 py-2 text-center text-[11px] font-semibold tracking-[0.14em] text-white/80 transition-colors">
-        AN OFFICIAL DIGITAL PUBLIC SERVICE
+      <div className="bg-[#092225] border-b border-white/10 px-5 py-1.5 text-white/90 transition-colors">
+        <div className="mx-auto flex max-w-[1240px] items-center justify-between text-[10px] sm:text-[11px] font-semibold tracking-wider">
+          <div className="flex items-center gap-2">
+            <img src="/emblem-india.svg" alt="State Emblem of India" className="h-5 w-auto object-contain" />
+            <span>भारत सरकार | GOVERNMENT OF INDIA</span>
+          </div>
+          <div className="flex items-center gap-3 text-white/70">
+            <span className="hidden md:inline">PUBLIC SERVICE REDRESSAL INFRASTRUCTURE</span>
+            <img src="/digital-india.svg" alt="Digital India" className="h-4 sm:h-4.5 w-auto object-contain" />
+          </div>
+        </div>
       </div>
 
       {/* Main Navigation Bar */}
@@ -92,8 +101,8 @@ export default function Navbar() {
             {/* Authentication Status / Sign In / Sign Out */}
             {isVerified ? (
               <div className="flex items-center gap-2.5">
-                <div className="flex items-center gap-1.5 rounded-full bg-[#e3f0ea] dark:bg-[#123830] px-3.5 py-1.5 text-xs font-bold text-[#2f7661] dark:text-[#70b99e] border border-[#347161]/20">
-                  <CivicIcon name="shield" size={13} />
+                <div className="flex items-center gap-2 rounded-full bg-[#e3f0ea] dark:bg-[#123830] px-3 py-1.5 text-xs font-bold text-[#2f7661] dark:text-[#70b99e] border border-[#347161]/20 shadow-sm">
+                  <img src="/jan-icon-dark.png" alt="जन" className="size-4 rounded-sm object-contain" />
                   <span className="truncate max-w-[150px]">
                     {user.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : user.email}
                   </span>

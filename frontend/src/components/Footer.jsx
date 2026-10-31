@@ -28,16 +28,16 @@ export default function Footer() {
       {/* Main Official Footer */}
       <div className="bg-[#08272b] px-5 py-10 text-white/60 lg:px-8">
         <div className="mx-auto flex max-w-[1240px] flex-col items-center justify-between gap-6 text-center text-xs sm:flex-row sm:text-left">
-          <div className="flex items-center gap-3 text-white">
+          <div className="flex flex-col sm:flex-row items-center gap-4 text-white">
             <img
               src="/logo-dark.jpg"
               alt="जनAawaz"
               className="h-9 w-auto object-contain rounded-md"
             />
-            <div>
-              <span className="block text-[9px] font-bold tracking-[0.16em] uppercase text-white/50">
-                STATUTORY PUBLIC GRIEVANCE REGISTRY
-              </span>
+            <div className="h-6 w-px bg-white/15 hidden sm:block" />
+            <div className="flex items-center gap-3">
+              <img src="/emblem-india.svg" alt="State Emblem of India" className="h-8 w-auto object-contain" />
+              <img src="/digital-india.svg" alt="Digital India" className="h-6 w-auto object-contain" />
             </div>
           </div>
 

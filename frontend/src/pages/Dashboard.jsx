@@ -114,9 +114,9 @@ export default function Dashboard() {
         <div className="relative mx-auto grid max-w-[1240px] items-center gap-12 lg:grid-cols-[1.05fr_.95fr]">
           {/* Left Text Presentation */}
           <div>
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#bd7f23]/25 bg-[#fffaf0] dark:bg-[#0d3035] px-3.5 py-2 text-[11px] font-bold tracking-[0.14em] text-[#956018] dark:text-[#e8b855] shadow-xs">
-              <CivicIcon name="sparkle" size={14} />
-              AI-POWERED CIVIC RESPONSE
+            <div className="mb-6 inline-flex items-center gap-2.5 rounded-full border border-[#bd7f23]/25 bg-[#fffaf0] dark:bg-[#0d3035] px-3.5 py-1.5 text-[11px] font-bold tracking-[0.14em] text-[#956018] dark:text-[#e8b855] shadow-sm">
+              <img src="/jan-icon-dark.png" alt="जन" className="size-4.5 rounded-sm object-contain" />
+              <span>जनAawaz • AI-POWERED CIVIC REDRESSAL</span>
             </div>
 
             <h1 className="max-w-2xl font-serif text-[44px] font-semibold leading-[1.03] tracking-[-0.035em] text-[#0d3035] dark:text-[#f6f4ee] sm:text-[62px] lg:text-[74px]">
@@ -706,12 +706,15 @@ export default function Dashboard() {
       {/* Footer */}
       <footer id="help" className="rounded-[26px] bg-[#08272b] px-6 py-10 text-white/60">
         <div className="max-w-[1240px] mx-auto flex flex-col items-center justify-between gap-6 text-center text-xs sm:flex-row sm:text-left">
-          <div className="flex items-center gap-3 text-white">
+          <div className="flex flex-col sm:flex-row items-center gap-3 text-white">
             <img
               src="/logo-dark.jpg"
               alt="जनAawaz"
               className="h-8 w-auto object-contain rounded"
             />
+            <div className="h-5 w-px bg-white/15 hidden sm:block" />
+            <img src="/emblem-india.svg" alt="Emblem of India" className="h-7 w-auto object-contain" />
+            <img src="/digital-india.svg" alt="Digital India" className="h-5 w-auto object-contain" />
           </div>
           <p>Emergency? Please contact emergency public safety dispatch immediately.</p>
           <div className="flex gap-5 text-white/80">

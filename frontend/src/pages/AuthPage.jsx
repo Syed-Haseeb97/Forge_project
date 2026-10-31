@@ -210,8 +210,8 @@ export default function AuthPage() {
         <div className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center py-8">
           {/* Top Status & Mode Toggle */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#bd7f23]/25 bg-[#fffaf0] dark:bg-[#0d3035] px-3.5 py-1.5 text-[10px] font-bold tracking-[.16em] uppercase text-[#ba7c29] dark:text-[#e8b855] w-fit">
-              <CivicIcon name="shield" size={13} className="text-[#347161]" />
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#bd7f23]/25 bg-[#fffaf0] dark:bg-[#0d3035] px-3 py-1.5 text-[10px] font-bold tracking-[.16em] uppercase text-[#ba7c29] dark:text-[#e8b855] w-fit shadow-sm">
+              <img src="/jan-icon-dark.png" alt="जन" className="size-4 rounded-sm object-contain" />
               CITIZEN AUTHENTICATION
             </div>
 
@@ -582,7 +582,7 @@ export default function AuthPage() {
 
           {/* Privacy Guarantee Note */}
           <div className="mt-8 flex items-start gap-3 rounded-xl border border-[#347161]/20 bg-[#e9efea] dark:bg-[#122824] p-4 text-xs leading-relaxed text-[#405654] dark:text-[#9eb5b1]">
-            <CivicIcon name="shield" size={18} className="mt-0.5 shrink-0 text-[#3f776b]" />
+            <img src="/emblem-india.svg" alt="Emblem of India" className="h-6 w-auto object-contain mt-0.5 shrink-0" />
             <span>
               Your personal information, address, and Aadhaar identifiers are securely encrypted in the municipal database and never exposed on public dashboards.
             </span>
@@ -631,9 +631,11 @@ export default function AuthPage() {
 
         {/* Quote Block */}
         <div className="relative max-w-xl border-t border-white/15 pt-8">
-          <span className="flex size-14 items-center justify-center rounded-full bg-[#e8b855] text-[#0d3035] shadow-lg">
-            <CivicIcon name="shield" size={26} />
-          </span>
+          <img
+            src="/jan-icon-dark.png"
+            alt="जनAawaz"
+            className="size-14 rounded-2xl object-cover shadow-2xl border border-white/20 mb-3"
+          />
           <blockquote className="mt-5 font-serif text-3xl leading-snug xl:text-4xl text-white">
             “Public problems deserve visible progress, not silent paperwork.”
           </blockquote>

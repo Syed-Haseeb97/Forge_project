@@ -34,7 +34,7 @@ export default function ReportCard({ report, onUpvote, onWatchlistChange }) {
   }
 
   // Format reference number
-  const referenceCode = `CL-2026-${String(report.id).padStart(5, '0')}`
+  const referenceCode = `JA-2026-${String(report.id).padStart(5, '0')}`
 
   return (
     <Link to={`/reports/${report.id}`} className="block h-full group focus:outline-none">

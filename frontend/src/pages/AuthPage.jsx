@@ -61,6 +61,10 @@ export default function AuthPage() {
     try {
       const { data } = await axios.post('/api/auth/login-send-code', { email: cleanEmail })
       toast.success(data.message || 'Verification code sent to your email!')
+      if (data.dev_code) {
+        setOtp(data.dev_code)
+        toast.success(`Demo code auto-filled: ${data.dev_code}`, { icon: '🔑', duration: 7000 })
+      }
       setStep('otp')
       setCooldown(60)
     } catch (err) {
@@ -119,6 +123,10 @@ export default function AuthPage() {
         address: signupForm.address.trim(),
       })
       toast.success(data.message || 'Verification code sent to your email!')
+      if (data.dev_code) {
+        setOtp(data.dev_code)
+        toast.success(`Demo code auto-filled: ${data.dev_code}`, { icon: '🔑', duration: 7000 })
+      }
       setStep('otp')
       setCooldown(60)
     } catch (err) {

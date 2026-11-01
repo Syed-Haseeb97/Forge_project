@@ -17,6 +17,7 @@ EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "smtp").lower().strip()
 GMAIL_USER = os.getenv("GMAIL_USER")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+BREVO_API_KEY = os.getenv("BREVO_API_KEY")
 
 DEFAULT_FROM = "Jan Aawaz (जनAawaz) Portal <onboarding@resend.dev>" if EMAIL_PROVIDER == "resend" else (
     f"Jan Aawaz (जनAawaz) Portal <{GMAIL_USER}>" if GMAIL_USER else None
@@ -29,6 +30,8 @@ def is_email_configured() -> bool:
     provider = os.getenv("EMAIL_PROVIDER", "smtp").lower().strip()
     if provider == "resend":
         return bool(os.getenv("RESEND_API_KEY"))
+    if provider == "brevo":
+        return bool(os.getenv("BREVO_API_KEY"))
     return bool(os.getenv("GMAIL_USER") and os.getenv("GMAIL_APP_PASSWORD"))
 
 # In-memory OTP storage: { normalized_email: { "code": str, "citizen_data": dict, "expires_at": datetime, "last_sent_at": datetime, "attempts": int } }
@@ -194,6 +197,47 @@ def _send_via_resend(to_email: str, subject: str, plain_text: str, html_text: st
         return False
 
 
+def _send_via_brevo(to_email: str, subject: str, plain_text: str, html_text: str) -> bool:
+    """Send transactional email via Brevo (Sendinblue) v3 REST API."""
+    if not BREVO_API_KEY:
+        logger.warning("[EmailService] Brevo delivery disabled: BREVO_API_KEY not configured.")
+        return False
+
+    sender_email = os.getenv("BREVO_SENDER_EMAIL") or GMAIL_USER or "syed424893@gmail.com"
+    sender_name = os.getenv("BREVO_SENDER_NAME") or "Jan Aawaz Portal"
+
+    try:
+        with httpx.Client(timeout=6.0) as client:
+            resp = client.post(
+                "https://api.brevo.com/v3/smtp/email",
+                headers={
+                    "api-key": BREVO_API_KEY,
+                    "Content-Type": "application/json",
+                    "accept": "application/json",
+                },
+                json={
+                    "sender": {
+                        "name": sender_name,
+                        "email": sender_email,
+                    },
+                    "to": [
+                        {"email": to_email}
+                    ],
+                    "subject": subject,
+                    "htmlContent": html_text,
+                    "textContent": plain_text,
+                },
+            )
+            if resp.status_code in (200, 201):
+                logger.info(f"[EmailService Brevo] Successfully sent email to {to_email}")
+                return True
+            logger.error(f"[EmailService Brevo] API error {resp.status_code}: {resp.text}")
+            return False
+    except Exception as e:
+        logger.error(f"[EmailService Brevo Error] Failed to send email to {to_email}: {e}")
+        return False
+
+
 def send_verification_email(to_email: str, code: str, title: str = "Verify your email address", greeting: str = "") -> bool:
     plain_text = f"Your Jan Aawaz (जनAawaz) citizen verification code is: {code}\nValid for 10 minutes."
     html_text = build_verification_html(code, to_email, title=title, greeting=greeting)
@@ -202,6 +246,8 @@ def send_verification_email(to_email: str, code: str, title: str = "Verify your 
     # Route according to EMAIL_PROVIDER
     if EMAIL_PROVIDER == "resend":
         return _send_via_resend(to_email, subject, plain_text, html_text)
+    if EMAIL_PROVIDER == "brevo":
+        return _send_via_brevo(to_email, subject, plain_text, html_text)
 
     # Default: SMTP
     if not GMAIL_USER or not GMAIL_APP_PASSWORD:
@@ -249,6 +295,8 @@ def send_dispatch_email(to_email: str, subject: str, body_text: str) -> bool:
 
     if EMAIL_PROVIDER == "resend":
         return _send_via_resend(to_email, subject, body_text, html_content)
+    if EMAIL_PROVIDER == "brevo":
+        return _send_via_brevo(to_email, subject, body_text, html_content)
 
     if not GMAIL_USER or not GMAIL_APP_PASSWORD:
         logger.info("[EmailService] Dispatch email skipped: SMTP credentials not set. Notice recorded in database.")

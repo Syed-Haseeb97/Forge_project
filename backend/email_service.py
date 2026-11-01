@@ -21,7 +21,7 @@ _otp_store: Dict[str, Dict[str, Any]] = {}
 
 
 def _email_provider() -> str:
-    return os.getenv("EMAIL_PROVIDER", "resend").lower().strip()
+    return (os.getenv("EMAIL_PROVIDER") or "resend").lower().strip()
 
 
 def is_email_configured() -> bool:

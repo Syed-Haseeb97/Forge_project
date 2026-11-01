@@ -1,11 +1,15 @@
 import pytest
 import os
 import sys
-from unittest.mock import patch
 
 # Ensure backend directory is in path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+# ISOLATE TESTS: Force a dedicated local SQLite database for pytest so production DB is never touched
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test_fordge_isolated.db"
+os.environ["DEV_MODE"] = "true"
+
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 from main import app
 from auth import create_access_token

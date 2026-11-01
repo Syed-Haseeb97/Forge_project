@@ -165,7 +165,9 @@ export default function CivicMap({
 
         {/* 300m Hotspot Cluster Overlays */}
         {!interactivePicker &&
-          activeHotspots.map((h, idx) => (
+          activeHotspots
+            .filter((h) => h.is_cluster || (h.count && h.count >= 2))
+            .map((h, idx) => (
             <Circle
               key={`hotspot-${idx}-${h.lat}-${h.lon}`}
               center={[h.lat, h.lon]}

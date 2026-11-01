@@ -51,19 +51,25 @@ def _build_deterministic_brief(stats: Dict[str, Any]) -> Dict[str, Any]:
     active = stats["active_count"]
     resolved = stats["resolved_count"]
     overdue = stats["overdue_count"]
-    hotspots_count = len(stats["hotspots"])
+    clusters = [h for h in stats["hotspots"] if h.get("is_cluster") or h.get("count", 0) >= 2]
+    hotspots_count = len(clusters)
     top_dept = stats["department_metrics"][0]["department"] if stats["department_metrics"] else "Municipal Services"
+
+    if hotspots_count > 0:
+        cluster_text = f"Spatial grid clustering has isolated {hotspots_count} active 300-meter cluster(s) with concentrated citizen complaints, heavily impacting {top_dept}."
+    else:
+        cluster_text = f"Incidents remain geographically dispersed across sectors without multi-incident clusters, with primary operational demands distributed under {top_dept}."
 
     brief = (
         f"The Jan Aawaz civic telemetry platform is actively tracking {total} reported grievances across municipal sectors. "
         f"Currently, {active} issues remain active, {resolved} have completed verified resolution, and {overdue} dockets are flagged overdue under SLA guidelines. "
-        f"Spatial grid clustering has isolated {hotspots_count} active 300-meter cluster(s) with concentrated citizen complaints, heavily impacting {top_dept}."
+        f"{cluster_text}"
     )
 
     actions = [
-        f"Deploy rapid engineering inspection crews to the top 300m hotspot clusters identified in civic map.",
-        f"Prioritize clearance of the {overdue} overdue dockets currently escalated to departmental commissioners.",
-        f"Mobilize preventive maintenance teams under {top_dept} to address repeat structural failures."
+        f"Deploy rapid engineering inspection crews to verify active priority dockets under {top_dept}." if hotspots_count == 0 else f"Deploy rapid engineering inspection crews to the {hotspots_count} 300m hotspot cluster(s) identified in civic telemetry.",
+        f"Prioritize clearance of the {overdue} overdue dockets currently escalated to departmental commissioners." if overdue > 0 else f"Maintain high SLA compliance by dispatching pending open dockets before SLA breach.",
+        f"Mobilize preventive maintenance teams under {top_dept} to address recurring infrastructure stress."
     ]
 
     return {
@@ -224,10 +230,14 @@ async def generate_civic_insights(force_refresh: bool = False) -> Dict[str, Any]
     brief_data = None
 
     if client:
-        hotspots_summary = "\n".join(
-            f"- Lat {h['lat']}, Lon {h['lon']}: {h['count']} report(s), Dominant Category: {h['dominant_category']}, Samples: {', '.join(h['sample_titles'])}"
-            for h in hotspots[:5]
-        ) or "No localized spatial clusters detected."
+        clusters_only = [h for h in hotspots if h.get("is_cluster") or h.get("count", 0) >= 2]
+        if clusters_only:
+            hotspots_summary = "\n".join(
+                f"- Lat {h['lat']}, Lon {h['lon']}: {h['count']} report(s), Dominant Category: {h['dominant_category']}, Samples: {', '.join(h['sample_titles'])}"
+                for h in clusters_only[:5]
+            )
+        else:
+            hotspots_summary = "No multi-incident spatial hotspot clusters detected (all incidents are geographically dispersed single locations)."
 
         dept_summary = "\n".join(
             f"- {d['department']}: Total {d['total_reports']}, Active {d['active_count']}, Overdue {d['overdue_count']}, Avg Resolution Time: {d['avg_resolution_hours'] or 'N/A'} hours"

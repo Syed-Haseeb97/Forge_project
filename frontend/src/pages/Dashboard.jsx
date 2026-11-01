@@ -226,7 +226,7 @@ export default function Dashboard() {
               <span><span className="text-[#ba7c29] dark:text-[#e8b855]">जन</span>Aawaz • AI-POWERED CIVIC RESPONSE</span>
             </div>
 
-            <h1 className="max-w-2xl font-serif text-[44px] font-semibold leading-[1.03] tracking-[-0.035em] text-[#0d3035] dark:text-[#f6f4ee] sm:text-[62px] lg:text-[74px]">
+            <h1 className="max-w-2xl font-serif text-3xl xs:text-4xl sm:text-[56px] lg:text-[74px] font-semibold leading-[1.06] tracking-[-0.035em] text-[#0d3035] dark:text-[#f6f4ee]">
               Speak up.<br />
               We’ll <em className="font-normal text-[#ba7c29]">take it forward.</em>
             </h1>
@@ -241,7 +241,7 @@ export default function Dashboard() {
                   setActiveTab('report')
                   document.getElementById('portal-card')?.scrollIntoView({ behavior: 'smooth' })
                 }}
-                className="btn-primary group"
+                className="btn-primary group w-full sm:w-auto justify-center"
               >
                 REPORT AN ISSUE
                 <span className="flex size-7 items-center justify-center rounded-full bg-white/10 transition group-hover:translate-x-1">
@@ -254,7 +254,7 @@ export default function Dashboard() {
                   setActiveTab('track')
                   document.getElementById('portal-card')?.scrollIntoView({ behavior: 'smooth' })
                 }}
-                className="btn-secondary"
+                className="btn-secondary w-full sm:w-auto justify-center"
               >
                 <CivicIcon name="search" size={17} /> TRACK A COMPLAINT
               </button>
@@ -668,7 +668,7 @@ export default function Dashboard() {
 
       {/* Authority Priority Queue Card (Authority View Only) */}
       {isAuthority && authorityQueue && (
-        <section className="rounded-[28px] border border-[#ba7c29]/40 bg-white dark:bg-[#072124] p-6 sm:p-10 shadow-sm space-y-6">
+        <section className="rounded-[28px] border border-[#ba7c29]/40 bg-white dark:bg-[#072124] p-4 sm:p-10 shadow-sm space-y-6">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-black/10 dark:border-white/10 pb-6">
             <div className="flex items-center gap-3">
               <div className="flex size-12 items-center justify-center rounded-2xl bg-[#0d3035] text-[#e8b855] shadow-xs">
@@ -823,7 +823,7 @@ export default function Dashboard() {
 
       {/* AI Civic Intelligence & Pulse Brief Section */}
       {insights && (
-        <section className="rounded-[28px] border border-amber-300/40 dark:border-amber-500/20 bg-[#fffdfa] dark:bg-[#072124] p-6 sm:p-10 shadow-sm space-y-6">
+        <section className="rounded-[28px] border border-amber-300/40 dark:border-amber-500/20 bg-[#fffdfa] dark:bg-[#072124] p-4 sm:p-10 shadow-sm space-y-6">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-black/10 dark:border-white/10 pb-6">
             <div className="flex items-center gap-3">
               <div className="flex size-12 items-center justify-center rounded-2xl bg-[#0d3035] text-[#e8b855] shadow-xs">
@@ -850,7 +850,7 @@ export default function Dashboard() {
                 {insights.total_reports} Logged Issues
               </span>
               <span className="rounded-xl border border-amber-200 dark:border-amber-900/30 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-amber-800 dark:text-amber-300">
-                {insights.hotspots?.length || 0} 300m Hotspots
+                {insights.hotspots?.filter(h => h.is_cluster || (h.count && h.count >= 2))?.length || 0} 300m Hotspots
               </span>
               <span className="rounded-xl border border-rose-200 dark:border-rose-900/30 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 text-rose-800 dark:text-rose-300">
                 {insights.overdue_count || 0} Overdue
@@ -872,7 +872,7 @@ export default function Dashboard() {
                 </p>
 
                 {/* Hotspot Clusters Highlights */}
-                {insights.hotspots && insights.hotspots.length > 0 && (
+                {insights.hotspots && insights.hotspots.some(h => h.is_cluster || (h.count && h.count >= 2)) && (
                   <div className="rounded-2xl border border-amber-200/60 dark:border-amber-900/30 bg-[#fff9ed] dark:bg-amber-950/20 p-4 space-y-2">
                     <div className="flex items-center justify-between text-xs font-bold text-amber-900 dark:text-amber-300">
                       <span>Spatial 300m Clusters</span>
@@ -881,7 +881,7 @@ export default function Dashboard() {
                       </Link>
                     </div>
                     <div className="flex flex-wrap gap-2 pt-1">
-                      {insights.hotspots.slice(0, 4).map((h, i) => (
+                      {insights.hotspots.filter(h => h.is_cluster || (h.count && h.count >= 2)).slice(0, 4).map((h, i) => (
                         <span
                           key={i}
                           className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-white dark:bg-black/40 border border-amber-200 dark:border-amber-900/40 text-amber-900 dark:text-amber-200"

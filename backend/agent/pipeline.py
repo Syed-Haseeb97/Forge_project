@@ -27,6 +27,7 @@ from agent.schemas import (
     SemanticDuplicateList,
     WhyNowList,
     WhyNowItem,
+    AuthenticityVerdict,
 )
 from agent.tools import (
     reverse_geocode,
@@ -130,6 +131,141 @@ def _fallback_triage_result(
         "visible_hazards": ["Unverified field report requiring departmental physical inspection"],
         "evidence_severity": final_sev,
         "needs_human_review": False,
+        "authenticity": "unchecked",
+        "authenticity_reason": None,
+        "authenticity_confidence": None,
+    }
+
+
+
+async def check_authenticity(
+    title: str,
+    description: str,
+    category: str,
+    media_bytes: Optional[bytes],
+    media_mime: Optional[str],
+    latitude: Optional[float],
+    longitude: Optional[float],
+    client,
+    models: List[str],
+    on_step: Optional[Callable[[Dict[str, Any]], Awaitable[None]]],
+) -> Dict[str, Any]:
+    """Run Gemini authenticity gate to filter spam/joke/abuse complaints.
+
+    Returns dict with keys:
+      authenticity: genuine | suspicious | spam | unchecked
+      authenticity_reason: str
+      authenticity_confidence: float | None
+      skip_pipeline: bool  (True if spam/suspicious -> skip remaining steps)
+      timeline_note: str | None
+    """
+    t0 = time.time()
+    prompt_parts: List[Any] = []
+
+    if media_bytes and media_mime:
+        prompt_parts.append(types.Part.from_bytes(data=media_bytes, mime_type=media_mime))
+
+    coord_note = ""
+    if latitude is not None and longitude is not None:
+        coord_note = f"Claimed coordinates: lat={latitude}, lon={longitude}. "
+
+    sys_prompt = (
+        "You are an authenticity screener for a civic grievance platform. "
+        "Your only job: decide if this submission is a genuine civic issue "
+        "that deserves municipal attention.\n\n"
+        "RULES:\n"
+        "- Judge: is this a real infrastructure/civic problem a municipality can act on?\n"
+        "- Check: description-vs-photo match, category fit, joke/meme/abuse/gibberish/test content.\n"
+        "- NEVER penalise for short text, poor grammar, regional language, or missing photo alone.\n"
+        "- If EXIF GPS is visible in photo metadata and coordinates are provided, flag a large mismatch as a signal.\n"
+        "- When unsure choose 'suspicious', NOT 'spam'.\n"
+        "- Reserve 'spam' only for clear non-civic content (jokes, tests, abuse, memes) with confidence >= 0.8.\n"
+        "- Short Tamil/Hindi/Bengali/regional reports about real issues must pass as genuine.\n"
+        f"Title: {title}\n"
+        f"Category: {category}\n"
+        f"Description: {description}\n"
+        f"{coord_note}"
+    )
+    prompt_parts.append(types.Part.from_text(text=sys_prompt))
+
+    if client:
+        for model_name in models:
+            try:
+                t_sub0 = time.time()
+                resp = await asyncio.wait_for(
+                    client.aio.models.generate_content(
+                        model=model_name,
+                        contents=prompt_parts,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=AuthenticityVerdict,
+                        ),
+                    ),
+                    timeout=10.0,
+                )
+                dur = int((time.time() - t_sub0) * 1000)
+                if resp.text:
+                    verdict = AuthenticityVerdict.model_validate_json(resp.text)
+                    v = verdict.verdict
+                    conf = verdict.confidence
+
+                    # Decision logic
+                    if v == "spam" and conf >= 0.8:
+                        auth = "spam"
+                    elif v == "spam" and conf < 0.8:
+                        auth = "suspicious"
+                    elif v == "suspicious":
+                        auth = "suspicious"
+                    else:
+                        auth = "genuine"
+
+                    skip = auth in ("spam", "suspicious")
+                    timeline_note = None
+                    if skip:
+                        timeline_note = f"Held: could not confirm this is a civic issue - {verdict.reason}"
+
+                    step_data = {
+                        "step": "authenticity_check",
+                        "tool": f"gemini_authenticity ({model_name})",
+                        "status": "success",
+                        "duration_ms": dur,
+                        "summary": f"Verdict: {auth.upper()} (confidence={conf:.2f}) - {verdict.reason}",
+                        "data": {"verdict": auth, "confidence": conf, "reason": verdict.reason, "signals": verdict.signals},
+                    }
+                    if on_step:
+                        await on_step(step_data)
+
+                    return {
+                        "authenticity": auth,
+                        "authenticity_reason": verdict.reason,
+                        "authenticity_confidence": conf,
+                        "skip_pipeline": skip,
+                        "timeline_note": timeline_note,
+                        "step_data": step_data,
+                    }
+            except Exception as e:
+                logger.warning(f"check_authenticity failed on {model_name}: {e}")
+
+    # Gemini failure -> unchecked + degraded
+    dur = int((time.time() - t0) * 1000)
+    step_data = {
+        "step": "authenticity_check",
+        "tool": "heuristic_fallback",
+        "status": "degraded",
+        "duration_ms": dur,
+        "summary": "Authenticity check degraded; proceeding as unchecked",
+        "data": {"verdict": "unchecked"},
+    }
+    if on_step:
+        await on_step(step_data)
+
+    return {
+        "authenticity": "unchecked",
+        "authenticity_reason": None,
+        "authenticity_confidence": None,
+        "skip_pipeline": False,
+        "timeline_note": None,
+        "step_data": step_data,
     }
 
 
@@ -192,11 +328,57 @@ async def _execute_agent_pipeline(
     media_mime: Optional[str] = None,
     db_session=None,
     on_step: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None,
+    _authenticity_result: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Internal step execution for the agentic triage pipeline."""
     trace: List[Dict[str, Any]] = []
     client = _get_client()
     models = _get_models()
+
+    # -------------------------------------------------------------
+    # Step 0: authenticity_check (Gemini gate, run FIRST)
+    # -------------------------------------------------------------
+    auth_res = await check_authenticity(
+        title=title,
+        description=description,
+        category=category,
+        media_bytes=media_bytes,
+        media_mime=media_mime,
+        latitude=latitude,
+        longitude=longitude,
+        client=client,
+        models=models,
+        on_step=on_step,
+    )
+    authenticity_val = auth_res.get("authenticity", "unchecked")
+    authenticity_reason_val = auth_res.get("authenticity_reason")
+    authenticity_conf_val = auth_res.get("authenticity_confidence")
+    if auth_res.get("step_data"):
+        trace.append(auth_res["step_data"])
+
+    # If spam or suspicious: SKIP remaining tool steps and return immediately
+    if auth_res.get("skip_pipeline"):
+        sev = "low" if authenticity_val == "spam" else "medium"
+        return {
+            "ai_analysis": f"Authenticity assessment ({authenticity_val.upper()}). {authenticity_reason_val or ''}",
+            "severity": sev,
+            "action_plan": "Held for authority review.",
+            "safety_precautions": "Verification pending.",
+            "sla_hours": 72,
+            "routed_to": ROUTING_MAP.get(category, "General Civic Administration"),
+            "agent_trace": trace,
+            "confidence": authenticity_conf_val or 0.5,
+            "severity_rationale": authenticity_reason_val or "Held by AI authenticity screening.",
+            "detected_language": "English",
+            "locality": location,
+            "visible_hazards": [],
+            "evidence_severity": sev,
+            "needs_human_review": True if authenticity_val == "suspicious" else False,
+            "authenticity": authenticity_val,
+            "authenticity_reason": authenticity_reason_val,
+            "authenticity_confidence": authenticity_conf_val,
+            "timeline_note": auth_res.get("timeline_note"),
+        }
 
     # Context values to populate across steps
     evidence_res: Optional[EvidenceAnalysis] = None
@@ -656,6 +838,10 @@ async def _execute_agent_pipeline(
         "visible_hazards": evidence_res.visible_hazards,
         "evidence_severity": evidence_res.evidence_severity,
         "needs_human_review": needs_human_review,
+        # Phase M: authenticity fields
+        "authenticity": authenticity_val,
+        "authenticity_reason": authenticity_reason_val,
+        "authenticity_confidence": authenticity_conf_val,
     }
 
 

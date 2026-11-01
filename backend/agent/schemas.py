@@ -196,3 +196,22 @@ class ExplanationOut(BaseModel):
     cached: bool = False
 
 
+class AuthenticityVerdict(BaseModel):
+    verdict: Literal["genuine", "suspicious", "spam"] = Field(
+        ...,
+        description="Authenticity verdict: genuine civic issue, suspicious (unclear), or spam/abuse"
+    )
+    confidence: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Confidence in the verdict between 0.0 and 1.0"
+    )
+    reason: str = Field(
+        ...,
+        description="Brief explanation of why this verdict was reached"
+    )
+    signals: List[str] = Field(
+        default_factory=list,
+        description="Specific signals observed that informed the verdict"
+    )

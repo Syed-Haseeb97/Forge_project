@@ -215,6 +215,19 @@ export default function PublicTrack() {
             </button>
           </div>
 
+          {/* Phase M: Authenticity Held Banner */}
+          {['suspicious', 'spam'].includes(data.authenticity) && (
+            <div className="rounded-2xl border border-amber-500/40 bg-amber-50/80 dark:bg-amber-950/20 p-4 text-xs text-amber-900 dark:text-amber-200">
+              <div className="flex items-center gap-2 font-bold">
+                <AlertTriangle size={15} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                <span>Held for review: {data.authenticity_reason || 'Under municipal verification'}</span>
+              </div>
+              <p className="mt-1 opacity-80 text-[11px] pl-6">
+                This grievance has been held for human verification by municipal oversight before field crew dispatch.
+              </p>
+            </div>
+          )}
+
           {/* Description */}
           <div className="space-y-1.5">
             <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#70817e] dark:text-[#8ea5a2]">

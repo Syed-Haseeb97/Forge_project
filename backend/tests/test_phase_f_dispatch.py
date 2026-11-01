@@ -72,6 +72,7 @@ def test_demo_mode_never_emails_department():
                 locality="Tiruchirappalli",
                 severity=SeverityEnum.medium,
                 status=StatusEnum.open,
+                authenticity="genuine",
                 needs_human_review=False,
                 created_at=datetime.utcnow(),
             )
@@ -126,6 +127,7 @@ def test_live_mode_passes_cc_and_reply_to():
                 locality="Tiruchirappalli",
                 severity=SeverityEnum.medium,
                 status=StatusEnum.open,
+                authenticity="genuine",
                 needs_human_review=False,
                 created_at=datetime.utcnow(),
             )

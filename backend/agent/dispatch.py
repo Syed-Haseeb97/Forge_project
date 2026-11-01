@@ -69,6 +69,23 @@ async def draft_and_send_dispatch(
                 logger.error(f"Dispatch agent: report {report_id} not found.")
                 return None
 
+            # Phase M: AI Authenticity gate
+            auth_val = getattr(report, "authenticity", "unchecked") or "unchecked"
+            if not (auth_val == "genuine" or (auth_val == "unchecked" and dispatch_mode == "demo")):
+                logger.info(f"Report {report_id} authenticity '{auth_val}' (mode={dispatch_mode}); skipping autonomous dispatch.")
+                tl_gate = ReportTimeline(
+                    id=str(uuid.uuid4()),
+                    report_id=report.id,
+                    status=report.status.value if hasattr(report.status, "value") else str(report.status),
+                    actor="Jan Aawaz Authenticity Gate",
+                    action_type="dispatch_held",
+                    notes=f"Autonomous dispatch held: authenticity is '{auth_val}'.",
+                    created_at=datetime.utcnow(),
+                )
+                session.add(tl_gate)
+                await session.commit()
+                return None
+
             # Safety gate: Only dispatch reports that are not needs_human_review
             if getattr(report, "needs_human_review", False):
                 logger.info(f"Report {report_id} flagged for human review (needs_human_review=True); skipping autonomous dispatch.")
@@ -247,7 +264,7 @@ async def draft_and_send_dispatch(
                 recipient_office=recipient_office,
                 subject=final_subject,
                 body=full_body,
-                sent=sent,
+                sent=bool(sent),
                 created_at=datetime.utcnow(),
             )
             session.add(dispatch_record)

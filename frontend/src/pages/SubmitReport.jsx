@@ -393,6 +393,46 @@ export default function SubmitReport() {
               Your grievance has been securely logged and queued for autonomous triage and official municipal dispatch.
             </p>
 
+            {/* Phase M: Authenticity Gate "Under Review" Alert Banner */}
+            {['suspicious', 'spam'].includes(submittedReport.authenticity) && (
+              <div className="my-6 max-w-xl mx-auto p-4 sm:p-5 rounded-2xl border-2 border-amber-500/40 bg-amber-50/90 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 text-left shadow-xs">
+                <div className="flex items-start gap-2.5">
+                  <div className="p-1 rounded-full bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 shrink-0 mt-0.5">
+                    <CivicIcon name="alert" size={15} />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <h4 className="font-bold text-xs uppercase tracking-wider text-amber-800 dark:text-amber-300">
+                      Under Review: {submittedReport.authenticity_reason || 'Authenticity verification in progress'}
+                    </h4>
+                    <p className="text-xs leading-relaxed opacity-90">
+                      Our automated authenticity screening flagged this grievance for human municipal review before official crew dispatch.
+                    </p>
+                    {!submittedReport.appeal_submitted ? (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await axios.post(`/api/reports/${submittedReport.id}/appeal`, { note: 'Citizen appealed via submission page' });
+                            toast.success('Appeal submitted. Queued for authority review.');
+                            setSubmittedReport(prev => ({ ...prev, appeal_submitted: true, authenticity: 'suspicious' }));
+                          } catch (err) {
+                            toast.error(err.response?.data?.detail || 'Failed to submit appeal');
+                          }
+                        }}
+                        className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white hover:bg-amber-700 font-bold text-[11px] shadow-xs transition"
+                      >
+                        <CivicIcon name="shield" size={13} /> Request Authority Review (Appeal)
+                      </button>
+                    ) : (
+                      <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-300">
+                        <CivicIcon name="check" size={13} /> Appeal submitted to authority queue
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Prominent Citizen Tracking Token Box */}
             <div className="my-8 max-w-xl mx-auto rounded-2xl border-2 border-[#ba7c29]/50 bg-[#fffaf0] dark:bg-[#132a2f] p-6 text-left shadow-sm">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">

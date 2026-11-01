@@ -183,6 +183,10 @@ class ReportOut(BaseModel):
     resolution_explanation: Optional[str] = None
     citizen_feedback: Optional[str] = None
     feedback_notes: Optional[str] = None
+    authenticity: Optional[str] = "unchecked"
+    authenticity_reason: Optional[str] = None
+    authenticity_confidence: Optional[float] = None
+    appeal_submitted: Optional[bool] = False
     created_at: datetime
     updated_at: datetime
 
@@ -237,6 +241,9 @@ class PublicTrackingOut(BaseModel):
     dispatch_info: Optional[Dict[str, Any]] = None
     media_url: Optional[str] = None
     resolved_media_url: Optional[str] = None
+    authenticity: Optional[str] = "unchecked"
+    authenticity_reason: Optional[str] = None
+    status_text: Optional[str] = None
     created_at: str
     updated_at: str
 
@@ -292,6 +299,8 @@ class QueueItemOut(BaseModel):
     score_breakdown: ScoreBreakdown
     why_now: Optional[str] = None
     media_url: Optional[str] = None
+    authenticity: Optional[str] = "unchecked"
+    authenticity_reason: Optional[str] = None
 
 
 class CrewBatchOut(BaseModel):
@@ -307,6 +316,7 @@ class AuthorityQueueOut(BaseModel):
     total_queued: int
     items: List[QueueItemOut]
     crew_batches: List[CrewBatchOut]
+    held_items: List[ReportOut] = []
 
 
 class StatsOut(BaseModel):
@@ -800,28 +810,49 @@ async def run_background_triage(
                 rep.detected_language = analysis_res.get("detected_language")
                 rep.locality = analysis_res.get("locality") or location
                 
-                if analysis_res.get("needs_human_review"):
+                rep.authenticity = analysis_res.get("authenticity", "unchecked")
+                rep.authenticity_reason = analysis_res.get("authenticity_reason")
+                rep.authenticity_confidence = analysis_res.get("authenticity_confidence")
+
+                if rep.authenticity == "suspicious" or analysis_res.get("needs_human_review"):
                     rep.needs_human_review = True
 
                 agent_trace_data = analysis_res.get("agent_trace")
                 rep.agent_trace = json.dumps(agent_trace_data) if agent_trace_data else "[]"
                 rep.triage_status = "done"
 
-                await log_timeline(
-                    session=session,
-                    report_id=report_id,
-                    status=StatusEnum.open.value,
-                    actor="Jan Aawaz AI Triage",
-                    action_type="ai_triage",
-                    notes=f"Assessed as {severity_str.upper()} priority ({rep.sla_hours}h SLA). Routed to {rep.routed_to}. Rationale: {rep.severity_rationale or 'Evaluated based on multi-signal evidence'}",
-                )
+                if analysis_res.get("timeline_note"):
+                    await log_timeline(
+                        session=session,
+                        report_id=report_id,
+                        status=StatusEnum.open.value,
+                        actor="Jan Aawaz Authenticity Gate",
+                        action_type="held_for_review",
+                        notes=analysis_res["timeline_note"],
+                    )
+                else:
+                    await log_timeline(
+                        session=session,
+                        report_id=report_id,
+                        status=StatusEnum.open.value,
+                        actor="Jan Aawaz AI Triage",
+                        action_type="ai_triage",
+                        notes=f"Assessed as {severity_str.upper()} priority ({rep.sla_hours}h SLA). Routed to {rep.routed_to}. Rationale: {rep.severity_rationale or 'Evaluated based on multi-signal evidence'}",
+                    )
                 await session.commit()
 
-        # The dispatch letter starts only when triage_status=done
-        try:
-            await draft_and_send_dispatch(report_id, "initial")
-        except Exception as e:
-            logger.warning(f"Error sending dispatch for {report_id}: {e}")
+        # Phase M: dispatch gate: only genuine or (unchecked and demo mode)
+        async with AsyncSessionLocal() as session:
+            r_cur = await session.get(Report, report_id)
+            cur_auth = getattr(r_cur, "authenticity", "unchecked") if r_cur else "unchecked"
+            cur_rev = getattr(r_cur, "needs_human_review", False) if r_cur else False
+
+        disp_mode = os.getenv("DISPATCH_MODE", "demo").lower()
+        if (cur_auth == "genuine" or (cur_auth == "unchecked" and disp_mode == "demo")) and not cur_rev:
+            try:
+                await draft_and_send_dispatch(report_id, "initial")
+            except Exception as e:
+                logger.warning(f"Error sending dispatch for {report_id}: {e}")
 
     except Exception as e:
         logger.error(f"Background triage failed for {report_id}: {e}", exc_info=True)
@@ -893,6 +924,23 @@ async def submit_report(
             cit = res.scalar_one_or_none()
             if cit:
                 citizen_id = cit.id
+
+        # Phase M: Abuse limit check - if same citizen has >=3 spam verdicts in 24h, return 429
+        from sqlalchemy import and_, func
+        cutoff_24h = datetime.utcnow() - timedelta(hours=24)
+        spam_filters = [Report.authenticity == "spam", Report.created_at >= cutoff_24h]
+        if citizen_id:
+            spam_filters.append(Report.citizen_id == citizen_id)
+        elif actual_citizen_email:
+            spam_filters.append(Report.citizen_email == actual_citizen_email.strip().lower())
+        
+        spam_count_res = await session.execute(select(func.count(Report.id)).where(and_(*spam_filters)))
+        spam_count = spam_count_res.scalar() or 0
+        if spam_count >= 3:
+            raise HTTPException(
+                status_code=429,
+                detail="Submission limit reached. You have 3 complaints flagged as non-civic/spam in the last 24 hours. Submissions temporarily restricted.",
+            )
 
         from sqlalchemy.exc import IntegrityError
 
@@ -1067,7 +1115,8 @@ async def list_reports(
 ):
     from sqlalchemy import select, and_
 
-    filters = []
+    from sqlalchemy import or_
+    filters = [or_(Report.authenticity != "spam", Report.authenticity.is_(None))]
     if status:
         filters.append(Report.status == StatusEnum(status))
     if severity:
@@ -1186,7 +1235,8 @@ async def export_reports(
     """Export public civic grievance data in CSV or JSON for citizen researchers and open data portals"""
     from sqlalchemy import select, and_
 
-    filters = []
+    from sqlalchemy import or_
+    filters = [or_(Report.authenticity != "spam", Report.authenticity.is_(None))]
     if status:
         filters.append(Report.status == StatusEnum(status))
     if severity:
@@ -1378,6 +1428,14 @@ async def public_track_ticket(token: str, request: Request):
             overdue_hrs = int(abs(diff_secs) // 3600)
             countdown_str = f"Overdue by {overdue_hrs}h"
 
+        track_status = report.status.value if hasattr(report.status, "value") else str(report.status)
+        track_status_text = None
+        if getattr(report, "authenticity", None) in ("spam", "suspicious"):
+            track_status = "Held for review"
+            track_status_text = f"Held for review: {report.authenticity_reason or 'Could not confirm this is a civic issue'}"
+            if dispatch_info:
+                dispatch_info["status_text"] = "Held for review"
+
         return PublicTrackingOut(
             docket_no=report.docket_no or f"JA-2026-{str(report.id)[:8].upper()}",
             tracking_token=report.tracking_token or "PENDING",
@@ -1386,7 +1444,10 @@ async def public_track_ticket(token: str, request: Request):
             category=report.category,
             locality=report.locality or report.location,
             severity=report.severity.value if hasattr(report.severity, "value") else str(report.severity),
-            status=report.status.value if hasattr(report.status, "value") else str(report.status),
+            status=track_status,
+            authenticity=report.authenticity or "unchecked",
+            authenticity_reason=report.authenticity_reason,
+            status_text=track_status_text,
             sla_hours=sla_hours,
             sla_deadline=deadline_dt.isoformat(),
             sla_remaining_hours=remaining_hours,
@@ -1480,11 +1541,27 @@ async def get_authority_priority_queue(
     from agent.pipeline import generate_why_now_rationales
 
     now = datetime.utcnow()
+    from sqlalchemy import or_, and_
     async with AsyncSessionLocal() as session:
         result = await session.execute(
-            select(Report).where(Report.status.in_([StatusEnum.open, StatusEnum.in_progress]))
+            select(Report).where(
+                and_(
+                    Report.status.in_([StatusEnum.open, StatusEnum.in_progress]),
+                    or_(Report.authenticity != "spam", Report.authenticity.is_(None)),
+                )
+            )
         )
         reports = result.scalars().all()
+
+        held_res = await session.execute(
+            select(Report).where(
+                or_(
+                    Report.authenticity.in_(["suspicious", "spam"]),
+                    Report.needs_human_review.is_(True),
+                )
+            ).order_by(Report.created_at.desc())
+        )
+        held_reports = held_res.scalars().all()
 
         if not reports:
             return AuthorityQueueOut(total_queued=0, items=[], crew_batches=[])
@@ -1647,10 +1724,12 @@ async def get_authority_priority_queue(
             for item in scored_items
         ]
 
+        held_items_out = [ReportOut.model_validate(r) for r in held_reports]
         return AuthorityQueueOut(
             total_queued=len(queue_items),
             items=queue_items,
             crew_batches=crew_batches,
+            held_items=held_items_out,
         )
 
 
@@ -1953,9 +2032,11 @@ async def get_insights(
 
 @app.get("/api/stats", response_model=StatsOut)
 async def get_stats():
-    from sqlalchemy import select
+    from sqlalchemy import select, or_
     async with AsyncSessionLocal() as session:
-        result = await session.execute(select(Report))
+        result = await session.execute(
+            select(Report).where(or_(Report.authenticity != "spam", Report.authenticity.is_(None)))
+        )
         all_reports = result.scalars().all()
 
         by_cat = {}
@@ -2033,7 +2114,8 @@ async def open311_requests(
 ):
     """Retrieve service requests in Open311 standard format"""
     from sqlalchemy import select, and_
-    filters = []
+    from sqlalchemy import or_
+    filters = [or_(Report.authenticity != "spam", Report.authenticity.is_(None))]
     if service_code:
         filters.append(Report.category == service_code)
     if status:
@@ -2083,6 +2165,125 @@ class CommentOut(BaseModel):
     class Config:
         from_attributes = True
 
+
+
+# ── Phase M: Authenticity Gate Management & Citizen Appeals ────────────────────
+class AuthenticityOverrideRequest(BaseModel):
+    verdict: str  # "genuine" | "spam" | "suspicious"
+    note: Optional[str] = None
+
+
+class CitizenAppealRequest(BaseModel):
+    note: Optional[str] = None
+
+
+@app.post("/api/reports/{report_id}/authenticity")
+async def override_authenticity(
+    report_id: str,
+    payload: AuthenticityOverrideRequest,
+    current_authority: Dict[str, Any] = Depends(require_authority),
+):
+    """Authority override for complaint authenticity (genuine / spam / suspicious)."""
+    authority_email = current_authority.get("sub", "authority")
+    verdict = payload.verdict.strip().lower()
+    if verdict not in ("genuine", "spam", "suspicious"):
+        raise HTTPException(status_code=400, detail="Verdict must be 'genuine', 'spam', or 'suspicious'.")
+
+    async with AsyncSessionLocal() as session:
+        report = await session.get(Report, report_id)
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+
+        report.authenticity = verdict
+        report.authenticity_reason = payload.note or f"Authority review verdict: {verdict}"
+        report.updated_at = datetime.utcnow()
+
+        if verdict == "genuine":
+            report.needs_human_review = False
+            await log_timeline(
+                session=session,
+                report_id=report.id,
+                status=report.status.value if hasattr(report.status, "value") else str(report.status),
+                actor=f"Authority ({authority_email})",
+                action_type="authority_approved",
+                notes=f"Authority approved: {payload.note or 'Report verified as genuine civic issue.'}",
+            )
+            await session.commit()
+            try:
+                await draft_and_send_dispatch(report.id, "initial")
+            except Exception as e:
+                logger.warning(f"Error triggering dispatch on authority approval: {e}")
+        elif verdict == "spam":
+            report.needs_human_review = False
+            await log_timeline(
+                session=session,
+                report_id=report.id,
+                status=report.status.value if hasattr(report.status, "value") else str(report.status),
+                actor=f"Authority ({authority_email})",
+                action_type="authority_marked_spam",
+                notes=f"Authority marked spam: {payload.note or 'Report classified as non-civic/spam.'}",
+            )
+            await session.commit()
+        else:  # suspicious
+            report.needs_human_review = True
+            await log_timeline(
+                session=session,
+                report_id=report.id,
+                status=report.status.value if hasattr(report.status, "value") else str(report.status),
+                actor=f"Authority ({authority_email})",
+                action_type="authority_flagged_suspicious",
+                notes=f"Authority marked suspicious: {payload.note or 'Held for manual inspection.'}",
+            )
+            await session.commit()
+
+        return {"message": f"Authenticity updated to {verdict}", "authenticity": verdict}
+
+
+@app.post("/api/reports/{report_id}/appeal")
+async def appeal_authenticity(
+    report_id: str,
+    payload: Optional[CitizenAppealRequest] = None,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Citizen appeal against a suspicious or spam authenticity flag (owner only, once)."""
+    citizen_email = current_user.get("sub")
+    citizen_id = current_user.get("user_id")
+
+    async with AsyncSessionLocal() as session:
+        report = await session.get(Report, report_id)
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+
+        is_owner = False
+        if citizen_id and report.citizen_id and str(report.citizen_id) == str(citizen_id):
+            is_owner = True
+        elif citizen_email and report.citizen_email and report.citizen_email.strip().lower() == citizen_email.strip().lower():
+            is_owner = True
+
+        if not is_owner:
+            raise HTTPException(status_code=403, detail="Only the reporting citizen can appeal this ticket.")
+
+        if getattr(report, "appeal_submitted", False):
+            raise HTTPException(status_code=400, detail="An appeal has already been submitted for this report.")
+
+        appeal_note = (payload.note if payload and payload.note else "Citizen requested authority review of held grievance.")
+        report.authenticity = "suspicious"
+        report.needs_human_review = True
+        report.appeal_submitted = True
+        report.authenticity_reason = f"Appealed by citizen: {appeal_note}"
+        report.updated_at = datetime.utcnow()
+
+        await log_timeline(
+            session=session,
+            report_id=report.id,
+            status=report.status.value if hasattr(report.status, "value") else str(report.status),
+            actor="Citizen Reporter",
+            action_type="appeal_submitted",
+            notes=f"Citizen appealed: {appeal_note}",
+        )
+        await session.commit()
+
+        return {"message": "Appeal submitted successfully", "authenticity": "suspicious"}
 
 @app.get("/api/reports/{report_id}/comments", response_model=List[CommentOut])
 async def get_comments(report_id: str):

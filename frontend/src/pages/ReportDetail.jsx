@@ -457,6 +457,23 @@ export default function ReportDetail() {
                 </span>
               )}
 
+              {/* Phase M: Authenticity Badges */}
+              {report.authenticity === 'genuine' && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#e3f0ea] text-[#2f7661] border border-[#347161]/30 px-3 py-1 text-xs font-bold uppercase">
+                  <CivicIcon name="check" size={13} /> AUTHENTIC
+                </span>
+              )}
+              {report.authenticity === 'suspicious' && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#fef3c7] text-[#b45309] border border-[#f59e0b]/40 px-3 py-1 text-xs font-bold uppercase">
+                  <AlertTriangle size={13} /> HELD: SUSPICIOUS
+                </span>
+              )}
+              {report.authenticity === 'spam' && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#fce8e6] text-[#b04b37] border border-[#b04b37]/40 px-3 py-1 text-xs font-bold uppercase">
+                  <CivicIcon name="alert" size={13} /> HELD: SPAM
+                </span>
+              )}
+
               {report.triage_status === 'triaging' ? (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#fef3c7] dark:bg-[#2e230d] text-[#b45309] dark:text-[#fde68a] border border-[#f59e0b]/40 px-3 py-1 text-xs font-bold uppercase animate-pulse">
                   <Loader2 size={13} className="animate-spin" /> TRIAGING...
@@ -490,6 +507,80 @@ export default function ReportDetail() {
               )}
             </div>
           </div>
+
+          {/* Phase M: Authenticity Gate "Under Review" Banner */}
+          {['suspicious', 'spam'].includes(report.authenticity) && (
+            <div className="my-6 p-4 sm:p-5 rounded-2xl border-2 border-amber-500/40 bg-amber-50/90 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                    <h4 className="font-bold text-xs uppercase tracking-wider text-amber-900 dark:text-amber-200">
+                      Under Review: {report.authenticity_reason || 'Could not immediately confirm this is an actionable civic issue'}
+                    </h4>
+                  </div>
+                  <p className="text-xs opacity-90 pl-6">
+                    This ticket is held from public feeds and automated dispatch pending human municipal review.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 pl-6 sm:pl-0">
+                  {user && (user.id === report.citizen_id || (user.email && report.citizen_email && user.email.toLowerCase() === report.citizen_email.toLowerCase())) && !report.appeal_submitted && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await axios.post(`/api/reports/${id}/appeal`, { note: 'Citizen appealed via docket page' });
+                          toast.success('Appeal submitted to municipal oversight queue');
+                          loadData();
+                        } catch (err) {
+                          toast.error(err.response?.data?.detail || 'Failed to submit appeal');
+                        }
+                      }}
+                      className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition shadow-xs"
+                    >
+                      Appeal Classification
+                    </button>
+                  )}
+
+                  {isAuthority && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await axios.post(`/api/reports/${id}/authenticity`, { verdict: 'genuine', note: 'Approved by municipal authority' });
+                            toast.success('Report approved as genuine. Dispatched to department.');
+                            loadData();
+                          } catch (err) {
+                            toast.error(err.response?.data?.detail || 'Failed to update authenticity');
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-[#2f7661] hover:bg-[#235848] text-white font-bold text-xs transition shadow-xs"
+                      >
+                        Approve (Genuine)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await axios.post(`/api/reports/${id}/authenticity`, { verdict: 'spam', note: 'Marked spam by municipal authority' });
+                            toast.success('Report confirmed as spam.');
+                            loadData();
+                          } catch (err) {
+                            toast.error(err.response?.data?.detail || 'Failed to update authenticity');
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-[#b04b37] hover:bg-[#8c3b2b] text-white font-bold text-xs transition shadow-xs"
+                      >
+                        Mark Spam
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Description */}
           <div className="py-6">

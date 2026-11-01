@@ -93,9 +93,12 @@ async def generate_civic_insights(force_refresh: bool = False) -> Dict[str, Any]
             cached_data["cached_until"] = (_INSIGHTS_CACHE["cached_at"] + timedelta(seconds=600)).isoformat()
             return cached_data
 
-    # 2. Query all reports from live DB
+    # 2. Query all reports from live DB (Phase M: exclude spam)
+    from sqlalchemy import or_
     async with AsyncSessionLocal() as session:
-        stmt = select(Report).order_by(Report.created_at.desc())
+        stmt = select(Report).where(
+            or_(Report.authenticity != "spam", Report.authenticity.is_(None))
+        ).order_by(Report.created_at.desc())
         res = await session.execute(stmt)
         reports = res.scalars().all()
 

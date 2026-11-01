@@ -14,6 +14,7 @@ export default function Dashboard() {
   const [insights, setInsights] = useState(null)
   const [healthInfo, setHealthInfo] = useState(null)
   const [authorityQueue, setAuthorityQueue] = useState(null)
+  const [queueTab, setQueueTab] = useState('active') // 'active' | 'held'
   const [recent, setRecent] = useState([])
   const [criticalReports, setCriticalReports] = useState([])
   const [activeTab, setActiveTab] = useState('report') // 'report' | 'track'
@@ -712,6 +713,34 @@ export default function Dashboard() {
             </p>
           </div>
 
+          {/* Phase M: Queue Tabs: Active vs Held */}
+          <div className="flex items-center gap-2 border-b border-black/10 dark:border-white/10 pb-3">
+            <button
+              type="button"
+              onClick={() => setQueueTab('active')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                queueTab === 'active'
+                  ? 'bg-[#0d3035] text-[#e8b855] dark:bg-[#e8b855] dark:text-[#0d3035]'
+                  : 'text-[#556b68] dark:text-[#95a9a6] hover:bg-black/5 dark:hover:bg-white/5'
+              }`}
+            >
+              <ListOrdered size={14} /> Active Priority Queue ({authorityQueue.total_queued})
+            </button>
+            <button
+              type="button"
+              onClick={() => setQueueTab('held')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                queueTab === 'held'
+                  ? 'bg-[#ba7c29] text-white dark:bg-[#ba7c29] dark:text-white'
+                  : 'text-[#556b68] dark:text-[#95a9a6] hover:bg-black/5 dark:hover:bg-white/5'
+              }`}
+            >
+              <AlertTriangle size={14} /> Held for Review ({authorityQueue.held_items?.length || 0})
+            </button>
+          </div>
+
+          {queueTab === 'active' && (
+            <>
           {/* Suggested 300m Crew Dispatch Batches */}
           {authorityQueue.crew_batches && authorityQueue.crew_batches.length > 0 && (
             <div className="space-y-3">
@@ -836,6 +865,81 @@ export default function Dashboard() {
               ))}
             </div>
           </div>
+          </>
+          )}
+
+          {/* Phase M: Held for Review Tab View */}
+          {queueTab === 'held' && (
+            <div className="space-y-3">
+              <p className="text-[10px] font-bold tracking-wider uppercase text-[#718481] dark:text-[#8ea5a2]">
+                Incidents Held for Human Authenticity Verification
+              </p>
+              {(!authorityQueue.held_items || authorityQueue.held_items.length === 0) ? (
+                <div className="p-8 text-center text-xs text-[#687a77] dark:text-[#8ea5a2] rounded-2xl border border-dashed border-black/15 dark:border-white/15">
+                  No grievances currently held for review.
+                </div>
+              ) : (
+                <div className="divide-y divide-black/10 dark:divide-white/10 rounded-2xl border border-black/10 dark:border-white/10 bg-[#f8f8f4] dark:bg-[#06181b] overflow-hidden">
+                  {authorityQueue.held_items.map((item) => (
+                    <div key={item.id} className="p-4 sm:p-5 text-xs space-y-3 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                            item.authenticity === 'spam'
+                              ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                              : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                          }`}>
+                            {item.authenticity || 'HELD'}
+                          </span>
+                          <span className="font-mono text-[11px] text-[#718481]">{item.docket_no}</span>
+                          <Link to={`/reports/${item.id}`} className="font-bold text-[#0d3035] dark:text-[#f6f4ee] hover:underline">
+                            {item.title}
+                          </Link>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await axios.post(`/api/reports/${item.id}/authenticity`, { verdict: 'genuine', note: 'Approved via Held queue' });
+                                toast.success(`Approved ${item.docket_no} as genuine.`);
+                                const qRes = await axios.get('/api/authority/queue');
+                                setAuthorityQueue(qRes.data);
+                              } catch (err) {
+                                toast.error(err.response?.data?.detail || 'Approval failed');
+                              }
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-[#2f7661] text-white hover:bg-[#235848] font-bold text-[11px] transition shadow-xs"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await axios.post(`/api/reports/${item.id}/authenticity`, { verdict: 'spam', note: 'Confirmed spam via Held queue' });
+                                toast.success(`Marked ${item.docket_no} as spam.`);
+                                const qRes = await axios.get('/api/authority/queue');
+                                setAuthorityQueue(qRes.data);
+                              } catch (err) {
+                                toast.error(err.response?.data?.detail || 'Action failed');
+                              }
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-[#b04b37] text-white hover:bg-[#8c3b2b] font-bold text-[11px] transition shadow-xs"
+                          >
+                            Mark Spam
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-[#556b68] dark:text-[#95a9a6] text-[11px]">
+                        <strong>Reason:</strong> {item.authenticity_reason || 'Could not confirm this is an actionable civic issue.'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </section>
       )}
 

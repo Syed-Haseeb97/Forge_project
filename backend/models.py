@@ -80,6 +80,11 @@ class Report(Base):
     # Citizen Verification / Feedback
     citizen_feedback = Column(String(50), nullable=True)
     feedback_notes = Column(Text, nullable=True)
+    # Phase M: AI Authenticity Gate
+    authenticity = Column(String(20), default="unchecked", nullable=True)
+    authenticity_reason = Column(Text, nullable=True)
+    authenticity_confidence = Column(Float, nullable=True)
+    appeal_submitted = Column(Boolean, default=False, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

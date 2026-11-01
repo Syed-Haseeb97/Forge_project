@@ -218,6 +218,13 @@ Both tests run automatically on every pull request and push to `main` via the Gi
 - Format for async SQLAlchemy: `postgresql+asyncpg://postgres.[REF]:[PASS]@[HOST]:5432/postgres`.
 - In **Storage**, create a public bucket named `reports` (or use local filesystem storage via `UPLOAD_DIR`).
 
+### Transactional Email (OTP & Dispatch)
+- Production transport is Resend's HTTPS API. Set `EMAIL_PROVIDER=resend` and add `RESEND_API_KEY` in the Render service environment.
+- **A verified sending domain is required to send to arbitrary citizens.** If you do not own a domain yet, Resend's shared `onboarding@resend.dev` sender is for testing and is restricted to the Resend account owner's verified email address. It will not support public sign-ups to arbitrary addresses.
+- For a production launch, add a domain you control in Resend, publish the exact SPF/DKIM DNS records Resend provides, wait for verification, and set `EMAIL_FROM` to an address on that verified domain.
+- Do not use Gmail SMTP on Render; outbound SMTP connectivity is restricted. SMTP remains an optional local-development fallback only.
+- The API now returns HTTP 503 if the email provider rejects or cannot accept an OTP request. A successful response means the provider accepted the message for processing, **not** that the recipient's mailbox has confirmed delivery.
+
 ### 2. Backend Deployment (Render or Fly.io)
 > [!NOTE]
 > On Render, the repository root (`./`) is the service root directory. The build command is `pip install -r backend/requirements.txt`, and the start command runs from `backend/`:

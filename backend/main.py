@@ -446,9 +446,17 @@ async def register_send_code(payload: RegisterSendCodeRequest):
         first_name,
     )
 
+    if not sent:
+        pop_otp(email)
+        logger.error("Registration OTP email was not accepted by the configured provider for %s", email)
+        raise HTTPException(
+            status_code=503,
+            detail="We couldn't send your verification email. Please try again later or contact support.",
+        )
+
     resp: Dict[str, Any] = {
         "ok": True,
-        "message": "Verification code dispatched to your email inbox." if sent else "Verification code generated.",
+        "message": "Verification email accepted by the email provider. Check your inbox and spam folder.",
     }
     if DEV_MODE:
         resp["dev_code"] = code
@@ -554,9 +562,17 @@ async def login_send_code(payload: LoginSendCodeRequest):
         citizen.first_name,
     )
 
+    if not sent:
+        pop_otp(email)
+        logger.error("Login OTP email was not accepted by the configured provider for %s", email)
+        raise HTTPException(
+            status_code=503,
+            detail="We couldn't send your verification email. Please try again later or contact support.",
+        )
+
     resp: Dict[str, Any] = {
         "ok": True,
-        "message": "Verification code sent to your email inbox." if sent else "Verification code dispatched.",
+        "message": "Verification email accepted by the email provider. Check your inbox and spam folder.",
     }
     if DEV_MODE:
         resp["dev_code"] = code

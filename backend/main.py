@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from database import engine, AsyncSessionLocal, Base
-from models import Report, ReportTimeline, Comment, Citizen, Dispatch, Explanation, Upvote, StatusEnum, SeverityEnum
+from models import Report, ReportTimeline, Citizen, Dispatch, Explanation, Upvote, StatusEnum, SeverityEnum
 from gemini_service import analyze_report, ROUTING_MAP
 from storage_service import save_media, UPLOAD_DIR, get_storage_mode
 from agent.dispatch import draft_and_send_dispatch
@@ -2149,24 +2149,6 @@ async def open311_requests(
         ]
 
 
-# ── Public Comments ────────────────────────────────────────────────────────────
-class CommentIn(BaseModel):
-    author: str = "Anonymous"
-    role: str = "citizen"
-    content: str
-
-
-class CommentOut(BaseModel):
-    id: str
-    report_id: str
-    author: str
-    role: str
-    content: str
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
 
 
 # ── Phase M: Authenticity Gate Management & Citizen Appeals ────────────────────
@@ -2286,61 +2268,3 @@ async def appeal_authenticity(
         await session.commit()
 
         return {"message": "Appeal submitted successfully", "authenticity": "suspicious"}
-
-@app.get("/api/reports/{report_id}/comments", response_model=List[CommentOut])
-async def get_comments(report_id: str):
-    from sqlalchemy import select
-    async with AsyncSessionLocal() as session:
-        result = await session.execute(
-            select(Comment).where(Comment.report_id == report_id).order_by(Comment.created_at.asc())
-        )
-        return result.scalars().all()
-
-
-@app.post("/api/reports/{report_id}/comments", response_model=CommentOut)
-async def add_comment(
-    report_id: str,
-    body: CommentIn,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    from sqlalchemy import select
-    async with AsyncSessionLocal() as session:
-        r = await session.execute(select(Report).where(Report.id == report_id))
-        report = r.scalar_one_or_none()
-        if not report:
-            raise HTTPException(404, "Report not found")
-
-        user_role = current_user.get("role", "citizen")
-        if body.role == "authority" and user_role != "authority":
-            raise HTTPException(
-                status_code=403,
-                detail="Authority credentials required to append authority updates.",
-            )
-
-        effective_role = "authority" if (user_role == "authority" and body.role == "authority") else "citizen"
-        author_name = body.author.strip() if body.author and body.author != "Anonymous" else current_user.get("sub", "Citizen")
-
-        comment = Comment(
-            id=str(uuid.uuid4()),
-            report_id=report_id,
-            author=author_name[:100],
-            role=effective_role,
-            content=body.content,
-            created_at=datetime.utcnow(),
-        )
-        session.add(comment)
-
-        # Log timeline comment note if authority
-        if effective_role == "authority":
-            await log_timeline(
-                session=session,
-                report_id=report_id,
-                status=report.status.value,
-                actor=f"Authority ({comment.author})",
-                action_type="authority_note",
-                notes=body.content[:300],
-            )
-
-        await session.commit()
-        await session.refresh(comment)
-        return comment

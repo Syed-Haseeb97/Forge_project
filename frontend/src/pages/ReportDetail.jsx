@@ -5,7 +5,6 @@ import toast from 'react-hot-toast'
 import {
   Star,
   ThumbsUp,
-  Send,
   ChevronDown,
   ChevronUp,
   Cpu,
@@ -49,16 +48,9 @@ export default function ReportDetail() {
   const [dispatches, setDispatches] = useState([])
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
-  const [comments, setComments] = useState([])
   const [showTrace, setShowTrace] = useState(true)
   const [copiedDispatch, setCopiedDispatch] = useState(false)
   const [submittingFeedback, setSubmittingFeedback] = useState(false)
-  const [commentForm, setCommentForm] = useState({
-    author: user?.name || '',
-    role: isAuthority ? 'authority' : 'citizen',
-    content: ''
-  })
-  const [submittingComment, setSubmittingComment] = useState(false)
   const [watched, setWatched] = useState(false)
 
   // Resolve modal/form state
@@ -78,15 +70,13 @@ export default function ReportDetail() {
 
   const loadData = async () => {
     try {
-      const [rRes, tRes, cRes, dRes] = await Promise.all([
+      const [rRes, tRes, dRes] = await Promise.all([
         axios.get(`/api/reports/${id}`),
         axios.get(`/api/reports/${id}/timeline`).catch(() => ({ data: [] })),
-        axios.get(`/api/reports/${id}/comments`).catch(() => ({ data: [] })),
         axios.get(`/api/reports/${id}/dispatches`).catch(() => ({ data: [] })),
       ])
       setReport(rRes.data)
       setTimeline(tRes.data)
-      setComments(cRes.data)
       setDispatches(dRes.data)
       setWatched(isWatched(rRes.data.id))
     } catch {
@@ -281,31 +271,6 @@ export default function ReportDetail() {
       toast.error(err.response?.data?.detail || 'Failed to submit resolution audit')
     } finally {
       setResolving(false)
-    }
-  }
-
-  const handleCommentSubmit = async (e) => {
-    e.preventDefault()
-    if (!commentForm.content.trim()) return
-    setSubmittingComment(true)
-    try {
-      const { data } = await axios.post(`/api/reports/${id}/comments`, {
-        author: commentForm.author || 'Anonymous Citizen',
-        role: commentForm.role,
-        content: commentForm.content,
-      })
-      setComments(prev => [...prev, data])
-      setCommentForm(f => ({ ...f, content: '', author: '' }))
-      toast.success('Municipal comment appended')
-
-      if (commentForm.role === 'authority') {
-        const tRes = await axios.get(`/api/reports/${id}/timeline`)
-        setTimeline(tRes.data)
-      }
-    } catch {
-      toast.error('Failed to append comment')
-    } finally {
-      setSubmittingComment(false)
     }
   }
 
@@ -1334,80 +1299,7 @@ export default function ReportDetail() {
           </div>
         )}
 
-        {/* Public Inquiry & Municipal Discourse */}
-        <div className="rounded-[26px] border border-[#173e42]/12 dark:border-[#173e42]/30 bg-white dark:bg-[#0b2529] p-6 sm:p-8 space-y-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h2 className="font-serif text-xl font-bold text-[#0d3035] dark:text-[#f6f4ee]">
-              Public Inquiry & Discussion
-            </h2>
-            <span className="font-mono text-xs text-[#718481]">
-              {comments.length} {comments.length === 1 ? 'record' : 'records'}
-            </span>
-          </div>
-
-          <div className="space-y-3">
-            {comments.length === 0 ? (
-              <p className="text-xs text-[#8a9996] text-center py-6">
-                No citizen inquiries or authority updates appended yet.
-              </p>
-            ) : (
-              comments.map(c => (
-                <div key={c.id} className="rounded-xl border border-[#173e42]/10 dark:border-[#173e42]/20 bg-[#f8f8f4] dark:bg-[#06181b] p-4 text-xs">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-bold text-[#0d3035] dark:text-[#f6f4ee]">{c.author}</span>
-                    <span className="font-mono text-[10px] text-[#8a9996]">
-                      {new Date(c.created_at).toLocaleString()}
-                    </span>
-                  </div>
-                  <p className="text-[#4e6361] dark:text-[#95a9a6] leading-relaxed">{c.content}</p>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Comment Form */}
-          <form onSubmit={handleCommentSubmit} className="pt-3 border-t border-[#173e42]/10 dark:border-[#173e42]/30 space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <input
-                type="text"
-                placeholder="Your Name (or Department)"
-                value={commentForm.author}
-                onChange={e => setCommentForm(f => ({ ...f, author: e.target.value }))}
-                className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] px-3.5 py-2.5 text-xs text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#95a5a3] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition font-medium"
-              />
-              {isAuthority ? (
-                <select
-                  value={commentForm.role}
-                  onChange={e => setCommentForm(f => ({ ...f, role: e.target.value }))}
-                  className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] px-3.5 py-2.5 text-xs font-semibold text-[#ba7c29] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition"
-                >
-                  <option value="authority">Municipal Authority Representative</option>
-                  <option value="citizen">Citizen Stakeholder</option>
-                </select>
-              ) : (
-                <div className="flex items-center px-3.5 py-2.5 rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] text-xs font-semibold text-[#556b68] dark:text-[#95a9a6]">
-                  Citizen Stakeholder
-                </div>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Append formal inquiry or status note..."
-                value={commentForm.content}
-                onChange={e => setCommentForm(f => ({ ...f, content: e.target.value }))}
-                className="flex-1 rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#06181b] px-3.5 py-2.5 text-xs text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#95a5a3] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition font-medium"
-              />
-              <button
-                type="submit"
-                disabled={submittingComment || !commentForm.content.trim()}
-                className="flex items-center justify-center rounded-xl bg-[#0d3035] px-4 text-white hover:bg-[#16444a] dark:bg-[#e8b855] dark:text-[#0d3035] transition disabled:opacity-50 shadow-xs"
-              >
-                <Send size={14} />
-              </button>
-            </div>
-          </form>
-        </div>
+        
 
       </div>
     </div>

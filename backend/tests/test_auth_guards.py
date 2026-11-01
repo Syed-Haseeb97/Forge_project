@@ -36,11 +36,6 @@ def test_citizen_auth_guard_rejects_unauthenticated(client):
     res_upvote = client.post("/api/reports/sample-id/upvote")
     assert res_upvote.status_code == 401
 
-    # POST /api/reports/{id}/comments
-    res_comment = client.post("/api/reports/sample-id/comments", json={
-        "content": "Public comment test"
-    })
-    assert res_comment.status_code == 401
 
 
 def test_authority_auth_guard_rejects_citizens(client, citizen_headers, authority_headers):

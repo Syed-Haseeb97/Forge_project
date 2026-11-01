@@ -476,7 +476,7 @@ async def register_send_code(payload: RegisterSendCodeRequest):
 
     resp: Dict[str, Any] = {
         "ok": True,
-        "message": "Verification code dispatched to your email inbox." if sent else "Verification code generated.",
+        "message": "Verification code sent to your email inbox! (Please check your Spam/Junk folder if not in Inbox)",
     }
     if DEV_MODE:
         resp["dev_code"] = code
@@ -584,7 +584,7 @@ async def login_send_code(payload: LoginSendCodeRequest):
 
     resp: Dict[str, Any] = {
         "ok": True,
-        "message": "Verification code sent to your email inbox." if sent else "Verification code dispatched.",
+        "message": "Verification code sent to your email inbox! (Please check your Spam/Junk folder if not in Inbox)",
     }
     if DEV_MODE:
         resp["dev_code"] = code

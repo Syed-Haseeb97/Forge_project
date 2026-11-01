@@ -60,10 +60,14 @@ export default function AuthPage() {
     setUnregisteredPrompt(null)
     try {
       const { data } = await axios.post('/api/auth/login-send-code', { email: cleanEmail })
-      toast.success(data.message || 'Verification code sent to your email!')
+      const devNotice = data.dev_code ? ` (Dev code: ${data.dev_code})` : ''
+      const msg = data.message || 'Verification code sent to your email inbox! (Please check your Spam/Junk folder if not in Inbox)'
+      toast.success(
+        `${msg}${devNotice}`,
+        { duration: 8000, icon: '✉️' }
+      )
       if (data.dev_code) {
         setOtp(data.dev_code)
-        toast.success(`Demo code auto-filled: ${data.dev_code}`, { icon: '🔑', duration: 7000 })
       }
       setStep('otp')
       setCooldown(60)
@@ -122,10 +126,14 @@ export default function AuthPage() {
         phone: formattedPhone,
         address: signupForm.address.trim(),
       })
-      toast.success(data.message || 'Verification code sent to your email!')
+      const devNotice = data.dev_code ? ` (Dev code: ${data.dev_code})` : ''
+      const msg = data.message || 'Verification code sent to your email inbox! (Please check your Spam/Junk folder if not in Inbox)'
+      toast.success(
+        `${msg}${devNotice}`,
+        { duration: 8000, icon: '✉️' }
+      )
       if (data.dev_code) {
         setOtp(data.dev_code)
-        toast.success(`Demo code auto-filled: ${data.dev_code}`, { icon: '🔑', duration: 7000 })
       }
       setStep('otp')
       setCooldown(60)
@@ -144,9 +152,9 @@ export default function AuthPage() {
   }
 
   // Handle Verify Code (works for both Login & Signup)
-  const handleVerifyCode = async (e) => {
+  const handleVerifyCode = async (e, directCode = null) => {
     e?.preventDefault()
-    const cleanCode = otp.trim()
+    const cleanCode = (directCode !== null && directCode !== undefined ? directCode : otp).trim()
     if (cleanCode.length !== 6) {
       toast.error('Please enter the full 6-digit verification code')
       return
@@ -264,7 +272,7 @@ export default function AuthPage() {
 
           <p className="mt-2 text-xs sm:text-sm leading-relaxed text-[#687976] dark:text-[#95a9a6]">
             {step === 'otp'
-              ? `We sent a 6-digit verification code to ${activeEmail}. Enter it below to complete authentication.`
+              ? `We sent a 6-digit verification code to ${activeEmail}. Please check your Inbox and Spam/Junk folder. Enter it below to complete authentication.`
               : mode === 'login'
               ? 'Enter your registered email address to access your complaints, monitor engineering resolution dockets, and track responses.'
               : 'Register your citizen profile in the public municipal database to file complaints, attach verified evidence, and receive transparent updates.'}
@@ -490,6 +498,17 @@ export default function AuthPage() {
           {/* OTP Step (Both Modes) */}
           {step === 'otp' && (
             <form onSubmit={handleVerifyCode} className="mt-8 space-y-5">
+              {/* Spam/Junk Folder Notice Banner */}
+              <div className="rounded-xl border border-[#ba7c29]/35 bg-[#fffaf0] dark:bg-[#132a2f] p-3.5 text-xs text-[#8a5b17] dark:text-[#e8b855] flex items-start gap-2.5 shadow-xs">
+                <CivicIcon name="mail" size={17} className="shrink-0 mt-0.5 text-[#ba7c29]" />
+                <div className="space-y-1 text-left">
+                  <p className="font-bold">Check your Inbox &amp; Spam / Junk folder</p>
+                  <p className="text-[11px] text-[#6b7b79] dark:text-[#95a9a6] leading-relaxed">
+                    A 6-digit verification code was dispatched to <strong className="text-[#0d3035] dark:text-[#f6f4ee]">{activeEmail}</strong>. If you do not see it in your primary inbox, please check your <strong>Spam or Junk folder</strong>.
+                  </p>
+                </div>
+              </div>
+
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee]">
@@ -497,7 +516,10 @@ export default function AuthPage() {
                   </label>
                   <button
                     type="button"
-                    onClick={() => setStep('form')}
+                    onClick={() => {
+                      setStep('form')
+                      setOtp('')
+                    }}
                     className="text-[11px] font-bold text-[#ba7c29] hover:underline"
                   >
                     Edit information
@@ -510,13 +532,15 @@ export default function AuthPage() {
                     type="text"
                     maxLength={6}
                     autoFocus
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
                     pattern="[0-9]{6}"
                     value={otp}
                     onChange={(e) => {
                       const val = e.target.value.replace(/\D/g, '').slice(0, 6)
                       setOtp(val)
                       if (val.length === 6) {
-                        setTimeout(() => handleVerifyCode(), 100)
+                        handleVerifyCode(undefined, val)
                       }
                     }}
                     placeholder="• • • • • •"

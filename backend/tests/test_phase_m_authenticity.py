@@ -397,22 +397,24 @@ def test_8_meme_photo_mismatch_becomes_suspicious():
     asyncio.run(_run())
 
 
-def test_9_abuse_limit_three_spam_verdicts_returns_429(client, citizen_headers):
+def test_9_abuse_limit_three_spam_verdicts_returns_429(client):
     """9. Abuse limit: If citizen has >=3 spam verdicts in 24h, next submission returns 429."""
-    async def _run():
-        # The citizen_headers token has sub="citizen@janaawaz.in"
-        citizen_email = "citizen@janaawaz.in"
+    from auth import create_access_token
+    spammer_email = "spammer_abuse_test@janaawaz.in"
+    spammer_token = create_access_token(email=spammer_email, role="citizen")
+    spammer_headers = {"Authorization": f"Bearer {spammer_token}"}
 
+    async def _run():
         async with AsyncSessionLocal() as session:
             # Create or get citizen with unique ID
-            cit = (await session.execute(select(Citizen).where(Citizen.email == citizen_email))).scalar_one_or_none()
+            cit = (await session.execute(select(Citizen).where(Citizen.email == spammer_email))).scalar_one_or_none()
             if not cit:
                 citizen_id = str(uuid.uuid4())
                 cit = Citizen(
                     id=citizen_id,
-                    email=citizen_email,
-                    first_name="Test",
-                    last_name="Citizen",
+                    email=spammer_email,
+                    first_name="Spam",
+                    last_name="Tester",
                     dob="1990-01-01",
                     address="123 Civic Lane",
                     is_verified=True,
@@ -429,7 +431,7 @@ def test_9_abuse_limit_three_spam_verdicts_returns_429(client, citizen_headers):
                     id=str(uuid.uuid4()),
                     docket_no=f"JA-M-{uuid.uuid4().hex[:12].upper()}",
                     citizen_id=citizen_id,
-                    citizen_email=citizen_email,
+                    citizen_email=spammer_email,
                     title=f"Spam test {i+1}",
                     description="Gibberish test text",
                     category="other",
@@ -443,14 +445,14 @@ def test_9_abuse_limit_three_spam_verdicts_returns_429(client, citizen_headers):
                 session.add(spam_r)
             await session.commit()
 
-        # Now attempt 4th submission with citizen headers
+        # Now attempt 4th submission with spammer headers
         form_data = {
             "title": "Another attempt",
             "description": "Will this go through?",
             "category": "road_damage",
             "location": "Anna Nagar, Chennai",
         }
-        res = client.post("/api/reports", data=form_data, headers=citizen_headers)
+        res = client.post("/api/reports", data=form_data, headers=spammer_headers)
         assert res.status_code == 429
         assert "limit reached" in res.json()["detail"].lower()
 

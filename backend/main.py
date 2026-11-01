@@ -948,15 +948,17 @@ async def submit_report(
         for attempt in range(max_docket_retries):
             try:
                 # Determine sequential docket_no (JA-2026-00001)
-                docket_stmt = select(Report.docket_no).where(Report.docket_no.like("JA-2026-%")).order_by(Report.docket_no.desc()).limit(1)
-                last_docket = (await session.execute(docket_stmt)).scalar_one_or_none()
-                next_seq = 1
-                if last_docket:
-                    try:
-                        next_seq = int(last_docket.split("-")[-1]) + 1
-                    except ValueError:
-                        next_seq = 1
-                docket_no = f"JA-2026-{next_seq:05d}"
+                docket_stmt = select(Report.docket_no).where(Report.docket_no.like("JA-2026-%"))
+                all_dockets = (await session.execute(docket_stmt)).scalars().all()
+                max_seq = 0
+                for d in all_dockets:
+                    if d:
+                        part = d.split("-")[-1]
+                        if part.isdigit():
+                            num = int(part)
+                            if num > max_seq:
+                                max_seq = num
+                docket_no = f"JA-2026-{max_seq + 1 + attempt:05d}"
                 tracking_token = generate_tracking_token()
 
                 is_demo_accel = DEV_MODE or (get_sla_time_scale() > 1.0)

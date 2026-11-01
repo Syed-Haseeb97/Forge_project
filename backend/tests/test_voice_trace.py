@@ -3,7 +3,7 @@ import asyncio
 from unittest.mock import patch, MagicMock, AsyncMock
 
 from agent.pipeline import run_agent_pipeline
-from agent.schemas import EvidenceAnalysis, TriageDecision, CriticEvaluation
+from agent.schemas import EvidenceAnalysis, TriageDecision, CriticEvaluation, AuthenticityVerdict
 
 
 def test_voice_recording_evidence_captures_transcript_and_translation():
@@ -42,7 +42,15 @@ def test_voice_recording_evidence_captures_transcript_and_translation():
         suggested_severity=None,
     ).model_dump_json()
 
-    mock_models.generate_content = AsyncMock(side_effect=[ev_resp, dec_resp, critic_resp])
+    auth_resp = MagicMock()
+    auth_resp.text = AuthenticityVerdict(
+        verdict="genuine",
+        confidence=0.95,
+        reason="Genuine voice complaint",
+        signals=["valid audio"],
+    ).model_dump_json()
+
+    mock_models.generate_content = AsyncMock(side_effect=[auth_resp, ev_resp, dec_resp, critic_resp])
 
     async def _run():
         with patch("agent.pipeline._get_client", return_value=mock_client):

@@ -3,7 +3,7 @@ import asyncio
 from unittest.mock import patch, MagicMock, AsyncMock
 
 from agent.pipeline import run_agent_pipeline
-from agent.schemas import EvidenceAnalysis, TriageDecision, CriticEvaluation
+from agent.schemas import EvidenceAnalysis, TriageDecision, CriticEvaluation, AuthenticityVerdict
 
 
 def test_critic_disagreement_flags_human_review():
@@ -41,7 +41,15 @@ def test_critic_disagreement_flags_human_review():
         suggested_severity="high",
     ).model_dump_json()
 
-    mock_models.generate_content = AsyncMock(side_effect=[ev_resp, dec_resp, critic_resp])
+    auth_resp = MagicMock()
+    auth_resp.text = AuthenticityVerdict(
+        verdict="genuine",
+        confidence=0.95,
+        reason="Genuine civic complaint",
+        signals=["valid defect"],
+    ).model_dump_json()
+
+    mock_models.generate_content = AsyncMock(side_effect=[auth_resp, ev_resp, dec_resp, critic_resp])
 
     async def _run():
         with patch("agent.pipeline._get_client", return_value=mock_client):
@@ -96,7 +104,15 @@ def test_critic_agreement_keeps_human_review_false():
         suggested_severity=None,
     ).model_dump_json()
 
-    mock_models.generate_content = AsyncMock(side_effect=[ev_resp, dec_resp, critic_resp])
+    auth_resp = MagicMock()
+    auth_resp.text = AuthenticityVerdict(
+        verdict="genuine",
+        confidence=0.95,
+        reason="Genuine civic complaint",
+        signals=["valid defect"],
+    ).model_dump_json()
+
+    mock_models.generate_content = AsyncMock(side_effect=[auth_resp, ev_resp, dec_resp, critic_resp])
 
     async def _run():
         with patch("agent.pipeline._get_client", return_value=mock_client):

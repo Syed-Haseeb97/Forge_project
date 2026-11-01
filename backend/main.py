@@ -188,6 +188,7 @@ class ReportOut(BaseModel):
     authenticity_confidence: Optional[float] = None
     appeal_submitted: Optional[bool] = False
     is_owner: bool = False
+    has_upvoted: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -1215,6 +1216,18 @@ async def list_reports(
                 r for r in reports
                 if s in r.title.lower() or s in r.description.lower() or s in r.location.lower()
             ]
+        upvoted_ids = set()
+        if current_email and reports:
+            from models import Upvote
+            rep_ids = [r.id for r in reports]
+            uv_res = await session.execute(
+                select(Upvote.report_id).where(
+                    Upvote.report_id.in_(rep_ids),
+                    Upvote.user_email == current_email
+                )
+            )
+            upvoted_ids = set(uv_res.scalars().all())
+
         for r in reports:
             r.is_owner = bool(
                 current_user and (
@@ -1222,6 +1235,7 @@ async def list_reports(
                     (current_email and (r.citizen_email or "").strip().lower() == current_email)
                 )
             )
+            r.has_upvoted = r.id in upvoted_ids
         return reports
 
 
@@ -1577,6 +1591,17 @@ async def get_report(
                 (current_email and (report.citizen_email or "").strip().lower() == current_email)
             )
         )
+        has_upvoted = False
+        if current_email:
+            from models import Upvote
+            uv_res = await session.execute(
+                select(Upvote).where(
+                    Upvote.report_id == report_id,
+                    Upvote.user_email == current_email
+                )
+            )
+            has_upvoted = bool(uv_res.scalar_one_or_none())
+        report.has_upvoted = has_upvoted
         return report
 
 
@@ -1969,7 +1994,11 @@ async def upvote_report(
         ).scalar_one_or_none()
 
         if existing_upvote:
-            raise HTTPException(400, "Already upvoted this report")
+            await session.delete(existing_upvote)
+            report.upvotes = max(0, (report.upvotes or 0) - 1)
+            report.updated_at = datetime.utcnow()
+            await session.commit()
+            return {"upvotes": report.upvotes, "has_upvoted": False}
 
         new_upvote = Upvote(
             id=str(uuid.uuid4()),
@@ -1977,10 +2006,10 @@ async def upvote_report(
             user_email=user_email.strip().lower(),
         )
         session.add(new_upvote)
-        report.upvotes += 1
+        report.upvotes = (report.upvotes or 0) + 1
         report.updated_at = datetime.utcnow()
         await session.commit()
-        return {"upvotes": report.upvotes}
+        return {"upvotes": report.upvotes, "has_upvoted": True}
 
 
 @app.get("/api/reports/{report_id}/dispatches", response_model=List[DispatchOut])

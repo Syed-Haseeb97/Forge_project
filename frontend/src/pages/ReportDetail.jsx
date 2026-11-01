@@ -175,10 +175,14 @@ export default function ReportDetail() {
   const handleUpvote = async () => {
     try {
       const { data } = await axios.post(`/api/reports/${id}/upvote`)
-      setReport(r => ({ ...r, upvotes: data.upvotes }))
-      toast.success('Recorded municipal endorsement')
-    } catch {
-      toast.error('Failed to record endorsement')
+      setReport(r => ({ ...r, upvotes: data.upvotes, has_upvoted: Boolean(data.has_upvoted) }))
+      if (data.has_upvoted) {
+        toast.success('Recorded municipal endorsement')
+      } else {
+        toast.success('Removed municipal endorsement')
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to record endorsement')
     }
   }
 

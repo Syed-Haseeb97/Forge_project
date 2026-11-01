@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Star, ThumbsUp } from 'lucide-react'
 import CivicIcon from './CivicIcon'
@@ -8,18 +8,31 @@ import toast from 'react-hot-toast'
 
 export default function ReportCard({ report, onUpvote, onWatchlistChange }) {
   const [watched, setWatched] = useState(() => isWatched(report.id))
+  const [hasUpvoted, setHasUpvoted] = useState(Boolean(report.has_upvoted))
+  const [upvoteCount, setUpvoteCount] = useState(report.upvotes || 0)
   const isCritical = report.severity === 'critical'
   const isHigh = report.severity === 'high'
+
+  useEffect(() => {
+    setHasUpvoted(Boolean(report.has_upvoted))
+    setUpvoteCount(report.upvotes || 0)
+  }, [report.has_upvoted, report.upvotes])
 
   const handleUpvote = async (e) => {
     e.preventDefault()
     e.stopPropagation()
     try {
       const { data } = await axios.post(`/api/reports/${report.id}/upvote`)
-      onUpvote?.(report.id, data.upvotes)
-      toast.success('Recorded municipal endorsement')
-    } catch {
-      toast.error('Failed to register endorsement')
+      setUpvoteCount(data.upvotes)
+      setHasUpvoted(Boolean(data.has_upvoted))
+      onUpvote?.(report.id, data.upvotes, data.has_upvoted)
+      if (data.has_upvoted) {
+        toast.success('Recorded municipal endorsement')
+      } else {
+        toast.success('Removed municipal endorsement')
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to register endorsement')
     }
   }
 
@@ -183,11 +196,15 @@ export default function ReportCard({ report, onUpvote, onWatchlistChange }) {
             <button
               onClick={handleUpvote}
               type="button"
-              title="Endorse priority for this issue"
-              className="flex items-center gap-1 text-[11px] font-bold text-[#0d3035] dark:text-[#f6f4ee] bg-[#f6f4ee] dark:bg-[#163035] hover:bg-[#e8b855] dark:hover:bg-[#e8b855] dark:hover:text-[#0d3035] px-2.5 py-1 rounded-full transition"
+              title={hasUpvoted ? 'Remove your endorsement' : 'Endorse priority for this issue'}
+              className={`flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full transition ${
+                hasUpvoted
+                  ? 'text-[#ba7c29] bg-[#fffaf0] dark:bg-[#34260f] border border-[#ba7c29]/40 shadow-xs'
+                  : 'text-[#0d3035] dark:text-[#f6f4ee] bg-[#f6f4ee] dark:bg-[#163035] hover:bg-[#e8b855] dark:hover:bg-[#e8b855] dark:hover:text-[#0d3035]'
+              }`}
             >
-              <ThumbsUp size={11} />
-              <span>{report.upvotes || 0}</span>
+              <ThumbsUp size={11} fill={hasUpvoted ? 'currentColor' : 'none'} />
+              <span>{upvoteCount}</span>
             </button>
           </div>
         </div>

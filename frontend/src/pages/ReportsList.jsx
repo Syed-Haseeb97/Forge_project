@@ -65,8 +65,8 @@ export default function ReportsList() {
 
   const set = (k) => (e) => setFilters(f => ({ ...f, [k]: e.target.value }))
 
-  const handleUpvote = (id, upvotes) => {
-    setReports(prev => prev.map(r => r.id === id ? { ...r, upvotes } : r))
+  const handleUpvote = (id, upvotes, has_upvoted) => {
+    setReports(prev => prev.map(r => r.id === id ? { ...r, upvotes, has_upvoted } : r))
   }
 
   const handleWatchlistChange = () => {

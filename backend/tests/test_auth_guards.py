@@ -81,3 +81,47 @@ def test_authority_auth_guard_rejects_citizens(client, citizen_headers, authorit
     res_auth_watchdog = client.post("/api/admin/watchdog/run", headers=authority_headers)
     assert res_auth_watchdog.status_code == 200
     assert "checked" in res_auth_watchdog.json()
+
+def test_upvote_toggle_and_has_upvoted(client, citizen_headers):
+    """Test that authenticated citizen upvoting increments, sets has_upvoted, and toggles cleanly."""
+    import uuid, asyncio
+    from database import AsyncSessionLocal
+    from models import Report
+    from datetime import datetime
+
+    rep_id = str(uuid.uuid4())
+    async def create_rep():
+        async with AsyncSessionLocal() as session:
+            r = Report(
+                id=rep_id,
+                docket_no=f"JA-2026-{uuid.uuid4().hex[:5].upper()}",
+                title="Pothole for upvote test",
+                description="Testing upvote toggle",
+                category="road_damage",
+                location="Main Gate",
+                upvotes=0,
+                authenticity="genuine",
+                created_at=datetime.utcnow(),
+            )
+            session.add(r)
+            await session.commit()
+
+    asyncio.run(create_rep())
+
+    # 1. First upvote -> has_upvoted = True, count = 1
+    res1 = client.post(f"/api/reports/{rep_id}/upvote", headers=citizen_headers)
+    assert res1.status_code == 200
+    assert res1.json()["upvotes"] == 1
+    assert res1.json()["has_upvoted"] is True
+
+    # 2. Check get_report has_upvoted = True
+    res_get = client.get(f"/api/reports/{rep_id}", headers=citizen_headers)
+    assert res_get.status_code == 200
+    assert res_get.json()["has_upvoted"] is True
+
+    # 3. Second upvote toggles off -> has_upvoted = False, count = 0
+    res2 = client.post(f"/api/reports/{rep_id}/upvote", headers=citizen_headers)
+    assert res2.status_code == 200
+    assert res2.json()["upvotes"] == 0
+    assert res2.json()["has_upvoted"] is False
+

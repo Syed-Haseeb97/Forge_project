@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import axios from 'axios'
 import { Download, Star, SlidersHorizontal, RotateCcw } from 'lucide-react'
 import ReportCard from '../components/ReportCard'
@@ -285,19 +286,21 @@ export default function ReportsList() {
             <p className="mt-1 text-xs text-[#6e807e] dark:text-[#8ea5a2]">Synchronizing active incident dockets and triage records...</p>
           </div>
         ) : displayedReports.length === 0 ? (
-          <div className="rounded-[26px] border border-[#173e42]/12 dark:border-[#173e42]/30 bg-white dark:bg-[#0b2529] p-12 text-center shadow-sm">
+          <div className="rounded-[26px] border border-[#173e42]/12 dark:border-[#173e42]/30 bg-white dark:bg-[#0b2529] p-8 sm:p-14 text-center shadow-sm">
             <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-[#e3f0ea] dark:bg-[#123830] text-[#2f7661] dark:text-[#70b99e]">
               <CivicIcon name="shield" size={26} />
             </div>
-            <h3 className="mt-4 font-serif text-2xl font-bold text-[#0d3035] dark:text-[#f6f4ee]">
-              No Incident Records Found
+            <h3 className="mt-4 font-serif text-2xl sm:text-3xl font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+              {onlyWatched ? 'No Monitored Incidents' : 'Incident Registry is Clean'}
             </h3>
             <p className="mx-auto mt-2 max-w-md text-xs sm:text-sm text-[#617471] dark:text-[#8ea5a2] leading-relaxed">
               {onlyWatched
                 ? 'You have not added any incidents to your monitored watchlist yet. Click the star icon on any complaint to follow its status.'
-                : 'No incident reports match your active filter criteria. Try adjusting keywords or resetting filters.'}
+                : hasActiveFilters
+                ? 'No incident reports match your active filter criteria. Try adjusting keywords or resetting filters.'
+                : 'No grievances or infrastructure hazards are currently logged. Real citizen reports submitted via the portal will appear here with live AI evaluation.'}
             </p>
-            {hasActiveFilters && (
+            {hasActiveFilters ? (
               <button
                 type="button"
                 onClick={() => {
@@ -309,6 +312,16 @@ export default function ReportsList() {
                 <RotateCcw size={13} />
                 <span>Reset All Filters</span>
               </button>
+            ) : (
+              <div className="mt-6">
+                <Link
+                  to="/submit"
+                  className="btn-gold inline-flex items-center gap-2 text-xs px-6 py-3 shadow-[0_5px_16px_rgba(196,141,36,.18)]"
+                >
+                  <span>FILE A COMPLAINT</span>
+                  <CivicIcon name="arrow" size={14} />
+                </Link>
+              </div>
             )}
           </div>
         ) : viewMode === 'map' ? (

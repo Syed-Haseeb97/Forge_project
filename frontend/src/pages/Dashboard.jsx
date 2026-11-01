@@ -608,7 +608,7 @@ export default function Dashboard() {
             </div>
 
             {/* Resolved Badge on Floating Card */}
-            {stats && (
+            {stats && (stats.resolved + (stats.closed || 0)) > 0 && (
               <div className="absolute -bottom-5 -left-6 hidden sm:flex items-center gap-3 rounded-2xl border border-white dark:border-white/10 bg-white dark:bg-[#0d3035] px-4 py-3 shadow-[0_15px_35px_rgba(27,52,51,.15)]">
                 <div className="flex size-9 items-center justify-center rounded-full bg-[#e4f0e8] text-[#33715f]">
                   <CivicIcon name="check" size={18} />
@@ -996,7 +996,7 @@ export default function Dashboard() {
                   </div>
 
                   <div className="space-y-4">
-                    {stats?.by_category &&
+                    {stats?.by_category && Object.entries(stats.by_category).length > 0 ? (
                       Object.entries(stats.by_category).slice(0, 4).map(([cat, count]) => {
                         const pct = stats.total > 0 ? Math.round((count / stats.total) * 100) : 25
                         return (
@@ -1015,7 +1015,12 @@ export default function Dashboard() {
                             </div>
                           </div>
                         )
-                      })}
+                      })
+                    ) : (
+                      <p className="text-xs text-[#788683] dark:text-[#8ea5a2] py-4 text-center">
+                        No category data recorded yet.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

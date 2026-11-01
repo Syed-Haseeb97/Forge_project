@@ -11,8 +11,10 @@
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ecf8e.svg?style=flat&logo=supabase)](https://supabase.com)
 [![Open311](https://img.shields.io/badge/Open311-GeoReport_v2-e8b855.svg?style=flat)](https://www.open311.org)
 
-🌐 **Live Production Demo**: `TODO: fill`  
-📺 **Walkthrough Video**: `TODO: fill`
+🌐 **Live Production Demo**: [jan-aawaz01.vercel.app](https://jan-aawaz01.vercel.app/)  
+📺 **Walkthrough Video**: [Demo Video (Google Drive)](https://drive.google.com/drive/folders/1Ist0zB3orphOGPCnES815PwQaCUPVIEx)  
+📊 **Presentation / Pitch Deck**: [Pitch Deck (Google Drive)](https://drive.google.com/drive/folders/1UDYMj-_132RVqF9c9Sq_sPBIRWb-ilbx)  
+💻 **Public GitHub**: [github.com/Syed-Haseeb97/Forge_project](https://github.com/Syed-Haseeb97/Forge_project)
 
 ---
 
@@ -121,7 +123,7 @@ Jan Aawaz adheres to a **strict zero-dummy-data policy**. Every statistic, map o
 | Screenshot | Description | File Path |
 |---|---|---|
 | **Documentation & Assets Guide** | Screenshot catalog and documentation overview. | [`docs/screenshots/README.md`](docs/screenshots/README.md) |
-| *Product Screenshots* | System screens are captured during live evaluation. | `TODO: fill` |
+| *Product Screenshots & Deck* | Full interface walkthrough, workflow diagrams, and audit proofs. | [Pitch Deck & Demo Slides](https://drive.google.com/drive/folders/1UDYMj-_132RVqF9c9Sq_sPBIRWb-ilbx) |
 
 ---
 

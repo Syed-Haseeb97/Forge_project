@@ -40,6 +40,7 @@ class Report(Base):
 
     id = Column(String(36), primary_key=True)
     docket_no = Column(String(32), unique=True, nullable=True, index=True)
+    tracking_token = Column(String(32), unique=True, nullable=True, index=True)
     citizen_id = Column(String(36), ForeignKey("citizens.id", ondelete="SET NULL"), nullable=True, index=True)
     citizen_email = Column(String(255), nullable=True, index=True)
     title = Column(String(200), nullable=False)
@@ -114,6 +115,8 @@ class Dispatch(Base):
     report_id = Column(String(36), ForeignKey("reports.id", ondelete="CASCADE"), nullable=False, index=True)
     kind = Column(String(20), nullable=False, default="initial")  # initial | escalation
     to_email = Column(String(255), nullable=False)
+    cc_emails = Column(String(500), nullable=True)
+    recipient_office = Column(String(200), nullable=True)
     subject = Column(String(300), nullable=False)
     body = Column(Text, nullable=False)
     sent = Column(Boolean, default=False)

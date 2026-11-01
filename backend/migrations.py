@@ -71,6 +71,26 @@ def _inspect_and_migrate(connection):
         except Exception as e:
             logger.warning(f"Error backfilling docket numbers: {e}")
 
+    # 5. Backfill missing tracking_token for existing reports
+    if "reports" in existing_tables:
+        try:
+            from agent.tokens import generate_tracking_token
+            # Check if tracking_token column exists in inspector
+            rep_cols = {col["name"] for col in inspector.get_columns("reports")}
+            if "tracking_token" in rep_cols:
+                untokened = connection.execute(
+                    text("SELECT id FROM reports WHERE tracking_token IS NULL")
+                ).fetchall()
+                for row in untokened:
+                    tok = generate_tracking_token()
+                    connection.execute(
+                        text("UPDATE reports SET tracking_token = :tok WHERE id = :id"),
+                        {"tok": tok, "id": row[0]},
+                    )
+                    logger.info(f"Backfilled report {row[0]} with tracking_token={tok}")
+        except Exception as e:
+            logger.warning(f"Error backfilling tracking tokens: {e}")
+
 
 async def ensure_schema():
     """Runs at application startup to synchronize database tables and columns."""

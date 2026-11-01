@@ -134,13 +134,20 @@ export default function Dashboard() {
 
   const handleTrackLookup = async (e) => {
     e.preventDefault()
-    if (!trackingId.trim()) return
+    const val = trackingId.trim()
+    if (!val) return
+
+    // If citizen entered a tracking token format, navigate directly to public tracking portal
+    if (val.toUpperCase().startsWith('JA-TRK-')) {
+      navigate(`/track/${encodeURIComponent(val.toUpperCase())}`)
+      return
+    }
 
     setSearchingTicket(true)
     setTrackingResult(null)
     try {
       const { data } = await axios.get('/api/reports/lookup', {
-        params: { q: trackingId.trim() }
+        params: { q: val }
       })
       setTrackingResult(data)
     } catch (err) {
@@ -539,22 +546,22 @@ export default function Dashboard() {
                 <div className="min-h-[480px] p-6 sm:p-9 space-y-4">
                   <div>
                     <p className="text-[10px] font-bold tracking-[0.16em] text-[#ba7c29]">STATUS LOOKUP</p>
-                    <h2 className="mt-1 font-serif text-3xl font-bold">Track your complaint</h2>
+                    <h2 className="mt-1 font-serif text-3xl font-bold">Track your ticket</h2>
                     <p className="mt-2 text-sm leading-6 text-[#6b7b79] dark:text-[#95a9a6]">
-                      Enter your docket ID or keyword to view real-time municipal engineering updates.
+                      Enter your private tracking token (JA-TRK-XXXX-XXXX) or docket number (JA-2026-XXXXX) to view live SLA countdowns and municipal dispatches.
                     </p>
                   </div>
 
                   <form onSubmit={handleTrackLookup} className="space-y-3 pt-2">
                     <label className="block text-xs font-bold text-[#102a2f] dark:text-[#f6f4ee]">
-                      Complaint ID / Docket Reference
+                      Tracking Token or Docket Reference
                     </label>
                     <div className="relative">
                       <CivicIcon name="file" size={17} className="absolute left-4 top-3.5 text-[#718481]" />
                       <input
                         value={trackingId}
                         onChange={e => setTrackingId(e.target.value)}
-                        placeholder="e.g. JA-2026-00001 or 1 or water burst"
+                        placeholder="e.g. JA-TRK-7K9A-B23X or JA-2026-00001"
                         className="w-full rounded-xl border border-[#173e42]/15 bg-white dark:bg-[#0b2529] py-3.5 pl-11 pr-4 text-sm text-[#0d3035] dark:text-[#f6f4ee] placeholder:text-[#95a5a3] outline-none focus:border-[#ba7c29] focus:ring-2 focus:ring-[#ba7c29]/15 transition font-medium"
                       />
                     </div>
@@ -569,7 +576,7 @@ export default function Dashboard() {
 
                   {/* Tracking Result Card */}
                   {trackingResult && (
-                    <div className="mt-4 rounded-xl border border-[#347161]/30 bg-[#edf5ef] dark:bg-[#12383e] p-4 text-xs space-y-2 animate-fadeIn">
+                    <div className="mt-4 rounded-xl border border-[#347161]/30 bg-[#edf5ef] dark:bg-[#12383e] p-4 text-xs space-y-3 animate-fadeIn">
                       <div className="flex items-center justify-between">
                         <span className="font-serif font-bold text-base text-[#0d3035] dark:text-[#f6f4ee]">
                           {trackingResult.title}
@@ -585,10 +592,21 @@ export default function Dashboard() {
                       <p className="text-[#536866] dark:text-[#cbd5e1] line-clamp-2">
                         {trackingResult.description}
                       </p>
-                      <div className="pt-2 border-t border-black/10 dark:border-white/10 flex items-center justify-between">
-                        <span className="text-[10px] text-[#718481] dark:text-[#95a9a6]">
-                          Jurisdiction: {trackingResult.routed_to}
-                        </span>
+                      {trackingResult.tracking_token && (
+                        <div className="flex items-center justify-between bg-white/60 dark:bg-black/20 p-2 rounded-lg border border-black/5 dark:border-white/5">
+                          <span className="text-[10px] text-[#718481] dark:text-[#95a9a6]">Token:</span>
+                          <span className="font-mono text-xs font-bold text-[#ba7c29] dark:text-[#e8b855]">{trackingResult.tracking_token}</span>
+                        </div>
+                      )}
+                      <div className="pt-2 border-t border-black/10 dark:border-white/10 flex flex-wrap items-center justify-between gap-2">
+                        {trackingResult.tracking_token ? (
+                          <Link
+                            to={`/track/${trackingResult.tracking_token}`}
+                            className="font-bold text-[#2f7661] dark:text-[#70b99e] hover:underline flex items-center gap-1"
+                          >
+                            <CivicIcon name="search" size={12} /> Open Public Tracking Portal →
+                          </Link>
+                        ) : <span />}
                         <Link
                           to={`/reports/${trackingResult.id}`}
                           className="font-bold text-[#0d3035] dark:text-[#e8b855] hover:underline"

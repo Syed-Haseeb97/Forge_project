@@ -1,7 +1,8 @@
 """Autonomous Dispatch Agent for Jan Aawaz.
 
-Drafts formal bureaucratic complaint letters (in English + citizen's detected language)
-and dispatches them to the configured dispatch inbox.
+Resolves real municipal authority contacts, generates formal bureaucratic grievance letters
+(English + citizen's detected language), and dispatches work orders via configured provider
+with demo/live mode isolation and human-review safety gates.
 """
 import os
 import uuid
@@ -17,6 +18,7 @@ from sqlalchemy import select
 from database import AsyncSessionLocal
 from models import Report, Dispatch, ReportTimeline
 from email_service import send_dispatch_email
+from agent.directory import resolve_recipient, mask_email
 from agent.schemas import DispatchDraft
 
 logger = logging.getLogger("janaawaz.agent.dispatch")
@@ -43,11 +45,19 @@ async def draft_and_send_dispatch(
     kind: str = "initial",
     escalation_level: int = 0,
 ) -> Optional[Dict[str, Any]]:
-    """Draft formal dispatch letter and send to the configured dispatch inbox.
+    """Draft formal dispatch letter and send to the resolved municipal office or fallback inbox.
     
-    Must never crash or slow down the caller.
+    Adheres strictly to:
+    - DISPATCH_MODE (demo vs live)
+    - Safety gate: skips reports flagged with needs_human_review=True
+    - Appends public ticket link {PUBLIC_APP_URL}/reports/{id} and Google Maps link
+    - Records actual to/cc, recipient designation, and timeline notes
     """
-    to_email = os.getenv("DISPATCH_EMAIL", "dispatch@janaawaz.in")
+    dispatch_mode = os.getenv("DISPATCH_MODE", "demo").lower().strip()
+    fallback_inbox = os.getenv("DISPATCH_EMAIL", "dispatch@janaawaz.in")
+    public_app_url = os.getenv("PUBLIC_APP_URL", "http://localhost:5173").rstrip("/")
+    reply_to = os.getenv("REPLY_TO")
+
     client = _get_client()
     models = _get_models()
 
@@ -58,6 +68,46 @@ async def draft_and_send_dispatch(
             if not report:
                 logger.error(f"Dispatch agent: report {report_id} not found.")
                 return None
+
+            # Safety gate: Only dispatch reports that are not needs_human_review
+            if getattr(report, "needs_human_review", False):
+                logger.info(f"Report {report_id} flagged for human review (needs_human_review=True); skipping autonomous dispatch.")
+                tl_gate = ReportTimeline(
+                    id=str(uuid.uuid4()),
+                    report_id=report.id,
+                    status=report.status.value if hasattr(report.status, "value") else str(report.status),
+                    actor="Jan Aawaz Dispatch Guard",
+                    action_type="dispatch_held",
+                    notes="Autonomous dispatch held: incident flagged for manual human verification before municipal transmission.",
+                    created_at=datetime.utcnow(),
+                )
+                session.add(tl_gate)
+                await session.commit()
+                return None
+
+            # 1. Resolve Recipient from Directory (no DB table)
+            locality_str = report.locality or report.location or ""
+            recip = resolve_recipient(
+                category=report.category,
+                locality_or_city=locality_str,
+                escalation_level=escalation_level,
+            )
+
+            recipient_office = recip["designation"]
+            is_matched = recip.get("matched", False)
+
+            # Determine target TO and CC based on DISPATCH_MODE
+            if dispatch_mode == "live":
+                target_to = recip["to"]
+                team_cc_raw = os.getenv("TEAM_CC_EMAILS", "")
+                team_cc_list = [c.strip() for c in team_cc_raw.split(",") if c.strip()]
+                target_cc = list(dict.fromkeys(recip.get("cc", []) + team_cc_list))
+                is_demo = False
+            else:
+                # Demo mode: send ONLY to DISPATCH_EMAIL, label [DEMO]
+                target_to = fallback_inbox
+                target_cc = []
+                is_demo = True
 
             # Fetch previous dispatches if escalating
             prev_dispatches_text = ""
@@ -71,8 +121,10 @@ async def draft_and_send_dispatch(
                         [f"- [{d.created_at.strftime('%Y-%m-%d %H:%M')}] Kind: {d.kind}, Subject: {d.subject}" for d in prev_d]
                     )
 
-            # Metadata formatting
+            # Public links & coordinates
             docket_id = report.docket_no or f"JA-2026-{str(report.id)[:8].upper()}"
+            public_ticket_link = f"{public_app_url}/reports/{report.id}"
+            public_track_link = f"{public_app_url}/track/{report.tracking_token}" if getattr(report, "tracking_token", None) else public_ticket_link
             maps_link = (
                 f"https://www.google.com/maps?q={report.latitude},{report.longitude}"
                 if report.latitude and report.longitude
@@ -81,14 +133,6 @@ async def draft_and_send_dispatch(
             created_dt = report.created_at or datetime.utcnow()
             deadline_dt = created_dt + timedelta(hours=report.sla_hours or 72)
             deadline_str = deadline_dt.strftime("%Y-%m-%d %H:%M UTC")
-
-            recipient_office = report.routed_to or "Municipal Engineering Division"
-            if escalation_level == 1:
-                recipient_office = f"Head of Department / Chief Engineer ({report.routed_to})"
-            elif escalation_level == 2:
-                recipient_office = "Office of the Municipal Commissioner"
-            elif escalation_level >= 3:
-                recipient_office = "Civic Oversight & Escalations Desk"
 
             language = report.detected_language or "English"
             needs_regional = language.strip().lower() not in ["english", "en"]
@@ -103,9 +147,10 @@ async def draft_and_send_dispatch(
                     f"- Docket Reference: {docket_id}\n"
                     f"- Issue Title: {report.title}\n"
                     f"- Category: {report.category}\n"
-                    f"- Physical Locality: {report.locality or report.location}\n"
+                    f"- Physical Locality: {locality_str}\n"
                     f"- Geographic Coordinates: {maps_link}\n"
-                    f"- Evaluated Severity: {report.severity.upper()}\n"
+                    f"- Public Ticket Dossier: {public_ticket_link}\n"
+                    f"- Evaluated Severity: {report.severity.upper() if hasattr(report.severity, 'upper') else str(report.severity).upper()}\n"
                     f"- Target SLA Deadline: {deadline_str} ({report.sla_hours}h limit)\n"
                     f"- AI Triage Rationale: {report.severity_rationale or 'Evaluated via multi-signal civic triage'}\n"
                     f"- Citizen Evidence Media URL: {report.media_url or 'N/A'}\n"
@@ -113,9 +158,9 @@ async def draft_and_send_dispatch(
                     f"- Citizen Input Language: {language}\n"
                     f"{prev_dispatches_text}\n\n"
                     f"INSTRUCTIONS:\n"
-                    f"1. Generate a formal subject line (e.g. '[URGENT WORK ORDER #{docket_id}] {report.title} - {report.locality}').\n"
+                    f"1. Generate a formal subject line (e.g. '[URGENT WORK ORDER #{docket_id}] {report.title} - {locality_str}').\n"
                     f"2. Write a professional, assertive municipal dispatch letter in English citing the exact coordinates, Google Maps link, "
-                    f"SLA deadline, hazard rationale, and evidence URL.\n"
+                    f"public ticket link ({public_ticket_link}), SLA deadline, hazard rationale, and evidence URL.\n"
                     f"3. {'Also write a full formal version in ' + language + ' in body_regional.' if needs_regional else 'Set body_regional to null.'}\n"
                 )
 
@@ -139,7 +184,7 @@ async def draft_and_send_dispatch(
                         logger.warning(f"Dispatch drafting failed on {model_name}: {e}")
 
             if not draft_res:
-                # Heuristic formal draft
+                # Deterministic fallback draft
                 subject = f"[{'ESCALATION L' + str(escalation_level) if kind == 'escalation' else 'DISPATCH WORK ORDER'} #{docket_id}] {report.title}"
                 body_eng = (
                     f"To: {recipient_office}\n"
@@ -148,9 +193,10 @@ async def draft_and_send_dispatch(
                     f"SUBJECT: Incident Work Order Transmission for Docket #{docket_id}\n\n"
                     f"Please be advised that an infrastructure failure requiring departmental redressal has been verified:\n"
                     f"- Title: {report.title}\n"
-                    f"- Locality: {report.locality or report.location}\n"
+                    f"- Locality: {locality_str}\n"
                     f"- Location Coordinates: {maps_link}\n"
-                    f"- Priority / Severity: {report.severity.upper()}\n"
+                    f"- Public Ticket Dossier: {public_ticket_link}\n"
+                    f"- Priority / Severity: {report.severity.upper() if hasattr(report.severity, 'upper') else str(report.severity).upper()}\n"
                     f"- Target Resolution Deadline: {deadline_str}\n"
                     f"- Multi-Signal Triage Rationale: {report.severity_rationale or 'Direct citizen report'}\n"
                     f"- Photographic/Audio Evidence: {report.media_url or 'None attached'}\n\n"
@@ -158,73 +204,93 @@ async def draft_and_send_dispatch(
                 )
                 draft_res = DispatchDraft(subject=subject, body_english=body_eng, body_regional=None)
 
-            # Assemble complete dispatch document
+            # Apply [DEMO] tag if demo mode or demo recipient
+            final_subject = draft_res.subject
+            if is_demo or dispatch_mode == "demo":
+                if not final_subject.startswith("[DEMO]"):
+                    final_subject = f"[DEMO] {final_subject}"
+
+            # Assemble complete dispatch document with public links and hackathon prototype disclaimer
             full_body = (
-                f"=== JAN AAWAZ DISPATCH NOTICE (PROTOTYPE) ===\n"
+                f"=== JAN AAWAZ MUNICIPAL WORK ORDER DISPATCH NOTICE ===\n"
                 f"Docket Reference: {docket_id}\n"
                 f"Recipient Office: {recipient_office}\n"
-                f"Locality: {report.locality or report.location}\n"
+                f"Locality: {locality_str}\n"
+                f"Public Ticket Link: {public_ticket_link}\n"
+                f"Citizen Tracking Link: {public_track_link}\n"
                 f"Google Maps Link: {maps_link}\n"
-                f"SLA Target Window: {deadline_str} ({report.sla_hours} hours)\n\n"
+                f"SLA Target Window: {deadline_str} ({report.sla_hours} hours)\n"
+                f"Notice: Hackathon prototype, not an official government service\n\n"
                 f"{draft_res.body_english.strip()}"
             )
             if draft_res.body_regional:
                 full_body += f"\n\n=== {language.upper()} REGIONAL COMPANION ===\n{draft_res.body_regional.strip()}"
 
-            # Transmit via configured provider without blocking event loop
+            # Transmit via configured email provider without blocking event loop
             sent = await asyncio.to_thread(
                 send_dispatch_email,
-                to_email,
-                draft_res.subject,
-                full_body,
+                to_email=target_to,
+                subject=final_subject,
+                body_text=full_body,
+                cc=target_cc,
+                reply_to=reply_to,
             )
 
-            # Persist in dispatches table
+            # Persist in dispatches table (including cc_emails and recipient_office)
             dispatch_id = str(uuid.uuid4())
             dispatch_record = Dispatch(
                 id=dispatch_id,
                 report_id=report.id,
                 kind=kind,
-                to_email=to_email,
-                subject=draft_res.subject,
+                to_email=target_to,
+                cc_emails=",".join(target_cc) if target_cc else None,
+                recipient_office=recipient_office,
+                subject=final_subject,
                 body=full_body,
                 sent=sent,
                 created_at=datetime.utcnow(),
             )
             session.add(dispatch_record)
 
-            # Log timeline
-            if kind == "initial":
-                timeline_entry = ReportTimeline(
-                    id=str(uuid.uuid4()),
-                    report_id=report.id,
-                    status=report.status.value if hasattr(report.status, "value") else str(report.status),
-                    actor="Jan Aawaz Dispatch Agent",
-                    action_type="dispatch_sent",
-                    notes=f"Formal dispatch letter sent to configured dispatch inbox ({to_email}). Routed to {report.routed_to}.",
-                    created_at=datetime.utcnow(),
-                )
+            # Determine timeline audit note
+            if is_matched:
+                masked_addr = mask_email(recip["to"])
+                if dispatch_mode == "demo":
+                    timeline_notes = f"Sent to {recipient_office} ({masked_addr}) [Demo mode: routed to {target_to}]."
+                else:
+                    cc_str = f" CC: {', '.join(mask_email(c) for c in target_cc)}" if target_cc else ""
+                    timeline_notes = f"Sent to {recipient_office} ({masked_addr}).{cc_str}"
             else:
-                timeline_entry = ReportTimeline(
-                    id=str(uuid.uuid4()),
-                    report_id=report.id,
-                    status=report.status.value if hasattr(report.status, "value") else str(report.status),
-                    actor="SLA Watchdog Agent",
-                    action_type=f"escalation_level_{escalation_level}",
-                    notes=f"Escalation Level {escalation_level} ({recipient_office}) notice dispatched to configured dispatch inbox ({to_email}).",
-                    created_at=datetime.utcnow(),
-                )
+                timeline_notes = f"no matching department, sent to fallback inbox ({target_to})."
+
+            action_type_val = "dispatch_sent" if kind == "initial" else f"escalation_level_{escalation_level}"
+            actor_name = "Jan Aawaz Dispatch Agent" if kind == "initial" else "SLA Watchdog Agent"
+
+            timeline_entry = ReportTimeline(
+                id=str(uuid.uuid4()),
+                report_id=report.id,
+                status=report.status.value if hasattr(report.status, "value") else str(report.status),
+                actor=actor_name,
+                action_type=action_type_val,
+                notes=timeline_notes,
+                created_at=datetime.utcnow(),
+            )
             session.add(timeline_entry)
 
             await session.commit()
-            logger.info(f"Dispatch {dispatch_id} recorded for report {report_id} (kind={kind}, sent={sent}).")
+            logger.info(
+                f"Dispatch {dispatch_id} recorded for report {report_id} "
+                f"(mode={dispatch_mode}, to={target_to}, cc={target_cc}, sent={sent})."
+            )
 
             return {
                 "id": dispatch_id,
                 "report_id": report_id,
                 "kind": kind,
-                "to_email": to_email,
-                "subject": draft_res.subject,
+                "to_email": target_to,
+                "cc_emails": target_cc,
+                "recipient_office": recipient_office,
+                "subject": final_subject,
                 "body": full_body,
                 "sent": sent,
             }

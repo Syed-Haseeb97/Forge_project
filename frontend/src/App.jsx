@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard'
 import SubmitReport from './pages/SubmitReport'
 import ReportsList from './pages/ReportsList'
 import ReportDetail from './pages/ReportDetail'
+import PublicTrack from './pages/PublicTrack'
 import AuthPage from './pages/AuthPage'
 import AboutPage from './pages/AboutPage'
 import PrivacyPage from './pages/PrivacyPage'
@@ -16,9 +17,12 @@ export default function App() {
   const { isDark } = useTheme()
   const { isVerified } = useAuth()
   const location = useLocation()
-  const isPublicInfoRoute = location.pathname === '/about' || location.pathname === '/privacy'
+  const isPublicInfoRoute =
+    location.pathname === '/about' ||
+    location.pathname === '/privacy' ||
+    location.pathname.startsWith('/track')
 
-  // Allow viewing About and Privacy policies even when not authenticated
+  // Allow viewing About, Privacy policies, and Public Tracking even when not authenticated
   if (!isVerified && isPublicInfoRoute) {
     return (
       <div
@@ -30,6 +34,7 @@ export default function App() {
           <Routes>
             <Route path="/about" element={<AboutPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/track/:token" element={<PublicTrack />} />
           </Routes>
         </main>
         <Footer />
@@ -74,6 +79,7 @@ export default function App() {
           <Route path="/submit" element={<SubmitReport />} />
           <Route path="/reports" element={<ReportsList />} />
           <Route path="/reports/:id" element={<ReportDetail />} />
+          <Route path="/track/:token" element={<PublicTrack />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -23,6 +23,8 @@ export default function SubmitReport() {
   const [preview, setPreview] = useState(null)
   const [fileType, setFileType] = useState('image')
   const [submitting, setSubmitting] = useState(false)
+  const [submittedReport, setSubmittedReport] = useState(null)
+  const [copiedToken, setCopiedToken] = useState(false)
   const [autofilling, setAutofilling] = useState(false)
   const [locating, setLocating] = useState(false)
   const [mapCenter, setMapCenter] = useState(null)
@@ -303,7 +305,8 @@ export default function SubmitReport() {
 
       const { data } = await axios.post('/api/reports', fd)
       toast.success('Incident logged. Multimodal AI triage complete.')
-      navigate(`/reports/${data.id}`)
+      setSubmittedReport(data)
+      setSubmitting(false)
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Incident submission failed')
       setSubmitting(false)
@@ -370,6 +373,100 @@ export default function SubmitReport() {
                 <CivicIcon name="shield" size={13} className="text-[#347161]" />
                 <span>Your contact info remains private and is never shown publicly.</span>
               </div>
+            </div>
+          </div>
+        ) : submittedReport ? (
+          <div className="relative overflow-hidden rounded-[26px] border border-[#2f7661]/30 bg-white dark:bg-[#0b2529] p-6 sm:p-10 shadow-[0_30px_70px_rgba(26,53,52,.12)] text-center">
+            <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-[#e3f0ea] dark:bg-[#123830] text-[#2f7661] dark:text-[#70b99e] mb-5 shadow-sm">
+              <CivicIcon name="check" size={32} />
+            </div>
+
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#2f7661]/25 bg-[#edf5ef] dark:bg-[#0d3035] px-3.5 py-1.5 text-[11px] font-bold tracking-[0.14em] text-[#2f7661] dark:text-[#70b99e] uppercase mb-3">
+              <CivicIcon name="sparkle" size={13} />
+              Grievance Registered Successfully
+            </div>
+
+            <h1 className="font-serif text-3xl sm:text-4xl font-bold text-[#0d3035] dark:text-[#f6f4ee]">
+              Incident Docket #{submittedReport.docket_no}
+            </h1>
+            <p className="mt-2 text-sm text-[#5f716e] dark:text-[#95a9a6] max-w-lg mx-auto">
+              Your grievance has been securely logged and queued for autonomous triage and official municipal dispatch.
+            </p>
+
+            {/* Prominent Citizen Tracking Token Box */}
+            <div className="my-8 max-w-xl mx-auto rounded-2xl border-2 border-[#ba7c29]/50 bg-[#fffaf0] dark:bg-[#132a2f] p-6 text-left shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                <span className="text-[11px] font-bold tracking-wider uppercase text-[#ba7c29] dark:text-[#e8b855] flex items-center gap-1.5">
+                  <CivicIcon name="shield" size={14} /> Citizen Tracking Token
+                </span>
+                <span className="text-[10px] text-[#6b7b79] dark:text-[#8ea5a2]">
+                  No login required for tracking
+                </span>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-[#06181b] p-3.5 rounded-xl border border-[#ba7c29]/30">
+                <span className="font-mono text-xl sm:text-2xl font-black tracking-widest text-[#0d3035] dark:text-[#f6f4ee] select-all break-all">
+                  {submittedReport.tracking_token}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(submittedReport.tracking_token)
+                    setCopiedToken(true)
+                    toast.success('Tracking token copied to clipboard')
+                    setTimeout(() => setCopiedToken(false), 2500)
+                  }}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[#0d3035] text-white hover:bg-[#16444a] dark:bg-[#e8b855] dark:text-[#0d3035] dark:hover:bg-[#efc56b] font-bold text-xs transition shrink-0"
+                >
+                  <CivicIcon name={copiedToken ? 'check' : 'copy'} size={15} />
+                  <span>{copiedToken ? 'Copied!' : 'Copy Token'}</span>
+                </button>
+              </div>
+
+              <p className="mt-3.5 text-xs font-bold text-[#8a5b17] dark:text-[#e8b855] flex items-center gap-1.5">
+                <CivicIcon name="alert" size={14} /> Save this to track your ticket
+              </p>
+              <p className="mt-1 text-[11px] text-[#6b7b79] dark:text-[#95a9a6] leading-relaxed">
+                A confirmation email with this token and a tracking link was sent to your inbox. You or anyone with this token can monitor SLA countdowns and municipal resolution records at any time.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 max-w-md mx-auto">
+              <Link
+                to={`/track/${submittedReport.tracking_token}`}
+                className="btn-gold w-full flex items-center justify-center gap-2 py-3.5 text-xs font-bold"
+              >
+                <CivicIcon name="search" size={16} /> Track Ticket Live
+              </Link>
+              <Link
+                to={`/reports/${submittedReport.id}`}
+                className="w-full flex items-center justify-center gap-2 py-3.5 px-5 rounded-full border border-[#173e42]/20 dark:border-white/20 text-[#0d3035] dark:text-[#f6f4ee] hover:bg-black/5 dark:hover:bg-white/5 font-bold text-xs transition"
+              >
+                <CivicIcon name="file" size={16} /> View Full Docket
+              </Link>
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-black/10 dark:border-white/10">
+              <button
+                type="button"
+                onClick={() => {
+                  setSubmittedReport(null)
+                  setForm({
+                    title: '',
+                    description: '',
+                    category: 'road_damage',
+                    location: '',
+                    latitude: '',
+                    longitude: '',
+                  })
+                  setFile(null)
+                  setPreview(null)
+                }}
+                className="text-xs font-semibold text-[#5f716e] dark:text-[#95a9a6] hover:text-[#0d3035] dark:hover:text-white underline transition"
+              >
+                Submit another civic issue
+              </button>
             </div>
           </div>
         ) : submitting ? (

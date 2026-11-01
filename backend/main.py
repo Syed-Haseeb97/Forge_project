@@ -38,6 +38,8 @@ from agent.verification import verify_repair_evidence
 from agent.explainer import generate_plain_language_explanation
 from agent.insights import generate_civic_insights
 from agent.schemas import ExplanationOut
+from agent.tokens import generate_tracking_token
+from email_service import send_tracking_email
 from email_service import (
     generate_and_store_otp,
     verify_otp_code,
@@ -147,6 +149,7 @@ async def health_check():
 class ReportOut(BaseModel):
     id: str
     docket_no: Optional[str] = None
+    tracking_token: Optional[str] = None
     title: str
     description: str
     category: str
@@ -204,6 +207,8 @@ class DispatchOut(BaseModel):
     report_id: str
     kind: str
     to_email: str
+    cc_emails: Optional[str] = None
+    recipient_office: Optional[str] = None
     subject: str
     body: str
     sent: bool
@@ -211,6 +216,29 @@ class DispatchOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class PublicTrackingOut(BaseModel):
+    docket_no: str
+    tracking_token: str
+    title: str
+    description: str
+    category: str
+    locality: str
+    severity: str
+    status: str
+    sla_hours: int
+    sla_deadline: str
+    sla_remaining_hours: float
+    sla_countdown: str
+    escalation_level: int
+    is_overdue: bool
+    timeline: List[Dict[str, Any]] = []
+    dispatch_info: Optional[Dict[str, Any]] = None
+    media_url: Optional[str] = None
+    resolved_media_url: Optional[str] = None
+    created_at: str
+    updated_at: str
 
 
 class FeedbackRequest(BaseModel):
@@ -881,6 +909,7 @@ async def submit_report(
                     except ValueError:
                         next_seq = 1
                 docket_no = f"JA-2026-{next_seq:05d}"
+                tracking_token = generate_tracking_token()
 
                 is_demo_accel = DEV_MODE or (get_sla_time_scale() > 1.0)
                 default_dept = ROUTING_MAP.get(category, ROUTING_MAP["other"])
@@ -888,6 +917,7 @@ async def submit_report(
                 report = Report(
                     id=report_id,
                     docket_no=docket_no,
+                    tracking_token=tracking_token,
                     citizen_id=citizen_id,
                     citizen_email=actual_citizen_email.strip().lower() if actual_citizen_email else None,
                     title=title,
@@ -937,6 +967,18 @@ async def submit_report(
                 logger.warning(f"IntegrityError on docket insertion (attempt {attempt + 1}/{max_docket_retries}): {ie}")
                 if attempt == max_docket_retries - 1:
                     raise
+
+        # Send citizen confirmation email with tracking token and direct tracking link
+        if actual_citizen_email:
+            public_app_url = os.getenv("PUBLIC_APP_URL", "http://localhost:5173").rstrip("/")
+            track_url = f"{public_app_url}/track/{tracking_token}"
+            background_tasks.add_task(
+                send_tracking_email,
+                to_email=actual_citizen_email.strip().lower(),
+                docket_no=docket_no,
+                tracking_token=tracking_token,
+                tracking_url=track_url,
+            )
 
         # Enqueue background triage pipeline
         background_tasks.add_task(
@@ -1203,6 +1245,14 @@ async def lookup_report(q: str = Query(..., description="Docket number, UUID, or
     clean_q = query.lstrip("#").strip()
 
     async with AsyncSessionLocal() as session:
+        # 0. Direct tracking_token match (case-insensitive)
+        res_tok = await session.execute(
+            select(Report).where(func.upper(Report.tracking_token) == clean_q.upper()).order_by(Report.created_at.desc())
+        )
+        rep_tok = res_tok.scalars().first()
+        if rep_tok:
+            return rep_tok
+
         # 1. Direct docket_no match (case-insensitive)
         res = await session.execute(
             select(Report).where(func.lower(Report.docket_no) == clean_q.lower()).order_by(Report.created_at.desc())
@@ -1246,6 +1296,109 @@ async def lookup_report(q: str = Query(..., description="Docket number, UUID, or
         raise HTTPException(
             status_code=404,
             detail=f"No civic docket found matching reference '{q}'. Please verify your reference number.",
+        )
+
+
+@app.get("/api/track/{token}", response_model=PublicTrackingOut)
+async def public_track_ticket(token: str, request: Request):
+    """Public zero-PII tracking endpoint for citizens using their private tracking token."""
+    await check_ip_rate_limit(request, limit=30, window_secs=60.0)
+    clean_token = token.strip().upper()
+    if not clean_token:
+        raise HTTPException(status_code=400, detail="Tracking token cannot be empty.")
+
+    async with AsyncSessionLocal() as session:
+        # Match by tracking_token first
+        res = await session.execute(
+            select(Report).where(func.upper(Report.tracking_token) == clean_token)
+        )
+        report = res.scalars().first()
+
+        # Fallback: support looking up by docket_no as well
+        if not report:
+            res = await session.execute(
+                select(Report).where(func.upper(Report.docket_no) == clean_token)
+            )
+            report = res.scalars().first()
+
+        if not report:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Tracking reference '{token}' not found in active records. Please check the token sent in your email.",
+            )
+
+        # Timeline (strictly zero PII)
+        t_res = await session.execute(
+            select(ReportTimeline).where(ReportTimeline.report_id == report.id).order_by(ReportTimeline.created_at.asc())
+        )
+        timeline_entries = t_res.scalars().all()
+        clean_timeline = [
+            {
+                "status": t.status,
+                "actor": t.actor,
+                "action_type": t.action_type,
+                "notes": t.notes,
+                "media_url": t.media_url,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+            }
+            for t in timeline_entries
+        ]
+
+        # Dispatch info
+        d_res = await session.execute(
+            select(Dispatch).where(Dispatch.report_id == report.id).order_by(Dispatch.created_at.asc())
+        )
+        dispatches = d_res.scalars().all()
+        latest_dispatch = dispatches[-1] if dispatches else None
+
+        dispatch_info = None
+        if latest_dispatch:
+            from agent.directory import mask_email
+            dispatch_info = {
+                "designation": latest_dispatch.recipient_office or report.routed_to or "Municipal Engineering Division",
+                "time_sent": latest_dispatch.created_at.isoformat() if latest_dispatch.created_at else None,
+                "provider_accepted": bool(latest_dispatch.sent),
+                "status_text": "Sent to municipal authority" if latest_dispatch.sent else "Transmission queued",
+                "masked_recipient": mask_email(latest_dispatch.to_email),
+            }
+
+        # Calculate SLA countdown
+        created_dt = report.created_at or datetime.utcnow()
+        sla_hours = report.sla_hours or 72
+        deadline_dt = created_dt + timedelta(hours=sla_hours)
+        now = datetime.utcnow()
+        diff_secs = (deadline_dt - now).total_seconds()
+        remaining_hours = round(max(0.0, diff_secs / 3600.0), 1)
+
+        if diff_secs > 0:
+            hrs = int(diff_secs // 3600)
+            mins = int((diff_secs % 3600) // 60)
+            countdown_str = f"{hrs}h {mins}m remaining"
+        else:
+            overdue_hrs = int(abs(diff_secs) // 3600)
+            countdown_str = f"Overdue by {overdue_hrs}h"
+
+        return PublicTrackingOut(
+            docket_no=report.docket_no or f"JA-2026-{str(report.id)[:8].upper()}",
+            tracking_token=report.tracking_token or "PENDING",
+            title=report.title,
+            description=report.description,
+            category=report.category,
+            locality=report.locality or report.location,
+            severity=report.severity.value if hasattr(report.severity, "value") else str(report.severity),
+            status=report.status.value if hasattr(report.status, "value") else str(report.status),
+            sla_hours=sla_hours,
+            sla_deadline=deadline_dt.isoformat(),
+            sla_remaining_hours=remaining_hours,
+            sla_countdown=countdown_str,
+            escalation_level=report.escalation_level or 0,
+            is_overdue=bool(report.is_overdue),
+            timeline=clean_timeline,
+            dispatch_info=dispatch_info,
+            media_url=report.media_url,
+            resolved_media_url=report.resolved_media_url,
+            created_at=created_dt.isoformat(),
+            updated_at=(report.updated_at or created_dt).isoformat(),
         )
 
 

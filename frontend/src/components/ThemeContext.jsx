@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 const ThemeContext = createContext({
   isDark: false,
   toggleTheme: () => {},
+  setDark: () => {},
 })
 
 export function ThemeProvider({ children }) {
@@ -47,6 +48,18 @@ export function ThemeProvider({ children }) {
     applyThemeToDOM(isDark)
   }, [isDark])
 
+  const setDark = (dark) => {
+    setIsDark(prev => {
+      if (prev === dark) return prev
+      applyThemeToDOM(dark)
+      toast.success(dark ? 'Dark Mode Activated' : 'Light Mode Activated', {
+        id: 'theme-toggle-toast',
+        duration: 1500,
+      })
+      return dark
+    })
+  }
+
   const toggleTheme = () => {
     setIsDark(prev => {
       const next = !prev
@@ -60,7 +73,7 @@ export function ThemeProvider({ children }) {
   }
 
   return (
-    <ThemeContext.Provider value={{ isDark, toggleTheme }}>
+    <ThemeContext.Provider value={{ isDark, toggleTheme, setDark }}>
       {children}
     </ThemeContext.Provider>
   )

@@ -36,6 +36,22 @@ export default function Dashboard() {
   const [processing, setProcessing] = useState(false)
   const [submittedReport, setSubmittedReport] = useState(null)
 
+  // Scroll to anchor on mount or hash change
+  useEffect(() => {
+    if (window.location.hash) {
+      const targetId = window.location.hash.replace('#', '')
+      const tryScroll = (attempts = 0) => {
+        const el = document.getElementById(targetId)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth' })
+        } else if (attempts < 8) {
+          setTimeout(() => tryScroll(attempts + 1), 120)
+        }
+      }
+      setTimeout(() => tryScroll(), 100)
+    }
+  }, [])
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -281,7 +297,7 @@ export default function Dashboard() {
           </div>
 
           {/* Right Interactive Portal Card */}
-          <div id="portal-card" className="relative mx-auto w-full max-w-[540px]">
+          <div id="portal-card" className="scroll-mt-28 relative mx-auto w-full max-w-[540px]">
             <div className="absolute -inset-4 rotate-2 rounded-[32px] bg-[#e9b955]/20 pointer-events-none" />
             <div className="relative overflow-hidden rounded-[26px] border border-white/70 dark:border-white/10 bg-white dark:bg-[#0d3035] shadow-[0_30px_70px_rgba(26,53,52,.16)]">
               {/* Tab Header (Segmented Pill Style matching Citizen Auth) */}
@@ -645,7 +661,7 @@ export default function Dashboard() {
       </section>
 
       {/* How It Works Section */}
-      <section id="how-it-works" className="rounded-[30px] bg-[#0d3035] text-white p-7 sm:p-12 lg:p-16">
+      <section id="how-it-works" className="scroll-mt-28 rounded-[30px] bg-[#0d3035] text-white p-7 sm:p-12 lg:p-16">
         <div className="max-w-[1240px] mx-auto">
           <div className="flex flex-col justify-between gap-5 border-b border-white/10 pb-8 sm:flex-row sm:items-end">
             <div>
@@ -1043,7 +1059,7 @@ export default function Dashboard() {
       )}
 
       {/* Live Public Accountability Section */}
-      <section id="accountability">
+      <section id="accountability" className="scroll-mt-28">
         <div className="max-w-[1240px] mx-auto">
           <div className="grid items-end gap-6 lg:grid-cols-[1fr_.8fr] mb-10">
             <div>

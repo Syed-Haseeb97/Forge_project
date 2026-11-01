@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Sun, Moon } from 'lucide-react'
 import Brand from './Brand'
@@ -10,14 +10,68 @@ import toast from 'react-hot-toast'
 export default function Navbar() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const { isDark, toggleTheme } = useTheme()
+  const { isDark, toggleTheme, setDark } = useTheme()
   const { user, isVerified, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [activeSection, setActiveSection] = useState('overview')
+
+  // Track scroll position to update active navbar link dynamically on home page
+  useEffect(() => {
+    if (pathname !== '/') {
+      setActiveSection('')
+      return
+    }
+
+    const handleScroll = () => {
+      const scrollY = window.scrollY
+      const accountabilityEl = document.getElementById('accountability')
+      const howItWorksEl = document.getElementById('how-it-works')
+
+      const headerOffset = 150
+
+      if (accountabilityEl && scrollY >= accountabilityEl.offsetTop - headerOffset) {
+        setActiveSection('accountability')
+      } else if (howItWorksEl && scrollY >= howItWorksEl.offsetTop - headerOffset) {
+        setActiveSection('how-it-works')
+      } else {
+        setActiveSection('overview')
+      }
+    }
+
+    handleScroll()
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [pathname])
 
   const handleSignOut = () => {
     logout()
     toast.success('Signed out of citizen account')
     setMenuOpen(false)
+  }
+
+  const scrollToTop = (e) => {
+    setMenuOpen(false)
+    if (pathname === '/') {
+      e?.preventDefault()
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      window.history.pushState(null, '', '/')
+      setActiveSection('overview')
+    }
+  }
+
+  const scrollToSection = (e, sectionId) => {
+    e?.preventDefault()
+    setMenuOpen(false)
+    if (pathname !== '/') {
+      navigate(`/#${sectionId}`)
+    } else {
+      const el = document.getElementById(sectionId)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth' })
+        window.history.pushState(null, '', `/#${sectionId}`)
+        setActiveSection(sectionId)
+      }
+    }
   }
 
   return (
@@ -38,65 +92,110 @@ export default function Navbar() {
 
       {/* Main Navigation Bar */}
       <header className="sticky top-0 z-40 border-b border-[#173e42]/10 bg-[#f6f4ee]/95 dark:bg-[#06181b]/95 backdrop-blur-md transition-colors">
-        <div className="mx-auto flex max-w-[1240px] items-center justify-between px-5 py-3.5 lg:px-8">
-          <Link to="/" onClick={() => setMenuOpen(false)}>
+        <div className="mx-auto flex max-w-[1240px] items-center justify-between px-5 py-3 lg:px-8">
+          <Link to="/" onClick={scrollToTop}>
             <Brand />
           </Link>
 
           {/* Desktop Navigation Links */}
-          <nav className="hidden items-center gap-8 text-sm font-semibold lg:flex">
+          <nav className="hidden items-center gap-7 text-sm font-semibold lg:flex">
             <Link
               to="/"
-              className={`transition hover:text-[#bd7f23] ${
-                pathname === '/' ? 'text-[#0d3035] dark:text-[#e8b855] font-bold' : 'text-[#536866] dark:text-[#95a9a6]'
+              onClick={scrollToTop}
+              className={`relative py-1 transition-colors ${
+                pathname === '/' && activeSection === 'overview'
+                  ? 'text-[#ba7c29] dark:text-[#e8b855] font-bold'
+                  : 'text-[#536866] hover:text-[#ba7c29] dark:text-[#95a9a6] dark:hover:text-[#e8b855]'
               }`}
             >
               Overview
+              {pathname === '/' && activeSection === 'overview' && (
+                <span className="absolute -bottom-1 left-0 right-0 h-0.5 bg-[#ba7c29] dark:bg-[#e8b855] rounded-full animate-fadeIn" />
+              )}
             </Link>
+
             <Link
               to="/reports"
-              className={`transition hover:text-[#bd7f23] ${
-                pathname === '/reports' ? 'text-[#0d3035] dark:text-[#e8b855] font-bold' : 'text-[#536866] dark:text-[#95a9a6]'
+              className={`relative py-1 transition-colors ${
+                pathname === '/reports'
+                  ? 'text-[#ba7c29] dark:text-[#e8b855] font-bold'
+                  : 'text-[#536866] hover:text-[#ba7c29] dark:text-[#95a9a6] dark:hover:text-[#e8b855]'
               }`}
             >
               Incident Registry
+              {pathname === '/reports' && (
+                <span className="absolute -bottom-1 left-0 right-0 h-0.5 bg-[#ba7c29] dark:bg-[#e8b855] rounded-full animate-fadeIn" />
+              )}
             </Link>
+
             <a
               href="/#accountability"
-              className="text-[#536866] dark:text-[#95a9a6] transition hover:text-[#bd7f23]"
+              onClick={(e) => scrollToSection(e, 'accountability')}
+              className={`relative py-1 transition-colors ${
+                pathname === '/' && activeSection === 'accountability'
+                  ? 'text-[#ba7c29] dark:text-[#e8b855] font-bold'
+                  : 'text-[#536866] hover:text-[#ba7c29] dark:text-[#95a9a6] dark:hover:text-[#e8b855]'
+              }`}
             >
               Public Dashboard
+              {pathname === '/' && activeSection === 'accountability' && (
+                <span className="absolute -bottom-1 left-0 right-0 h-0.5 bg-[#ba7c29] dark:bg-[#e8b855] rounded-full animate-fadeIn" />
+              )}
             </a>
+
             <a
               href="/#how-it-works"
-              className="text-[#536866] dark:text-[#95a9a6] transition hover:text-[#bd7f23]"
+              onClick={(e) => scrollToSection(e, 'how-it-works')}
+              className={`relative py-1 transition-colors ${
+                pathname === '/' && activeSection === 'how-it-works'
+                  ? 'text-[#ba7c29] dark:text-[#e8b855] font-bold'
+                  : 'text-[#536866] hover:text-[#ba7c29] dark:text-[#95a9a6] dark:hover:text-[#e8b855]'
+              }`}
             >
               How it works
+              {pathname === '/' && activeSection === 'how-it-works' && (
+                <span className="absolute -bottom-1 left-0 right-0 h-0.5 bg-[#ba7c29] dark:bg-[#e8b855] rounded-full animate-fadeIn" />
+              )}
             </a>
           </nav>
 
           {/* Right Action Items */}
           <div className="hidden items-center gap-3 sm:flex">
-            {/* Theme Toggle Button */}
-            <button
-              onClick={toggleTheme}
-              type="button"
-              aria-label="Toggle visual theme"
-              title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-              className="flex items-center gap-1.5 rounded-full border border-[#173e42]/15 bg-white/60 dark:bg-white/10 px-3.5 py-2 text-xs font-bold text-[#102a2f] dark:text-[#f6f4ee] transition hover:bg-white dark:hover:bg-white/20"
+            {/* Dual Segmented Theme Toggle */}
+            <div
+              className="inline-flex items-center rounded-full border border-[#173e42]/15 dark:border-white/15 bg-black/5 dark:bg-white/5 p-0.5"
+              role="group"
+              aria-label="Color scheme theme"
             >
-              {isDark ? (
-                <>
-                  <Sun size={15} className="text-[#e8b855]" />
-                  <span>Light</span>
-                </>
-              ) : (
-                <>
-                  <Moon size={15} className="text-[#0d3035]" />
-                  <span>Dark</span>
-                </>
-              )}
-            </button>
+              <button
+                type="button"
+                onClick={() => setDark ? setDark(false) : (isDark && toggleTheme())}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                  !isDark
+                    ? 'bg-white text-[#ba7c29] shadow-xs'
+                    : 'text-[#829794] hover:text-[#f6f4ee]'
+                }`}
+                title="Light mode"
+                aria-pressed={!isDark}
+              >
+                <Sun size={13} className={!isDark ? 'text-[#ba7c29]' : 'text-current'} />
+                <span>Light</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDark ? setDark(true) : (!isDark && toggleTheme())}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                  isDark
+                    ? 'bg-[#12383e] text-[#e8b855] shadow-xs border border-[#e8b855]/25'
+                    : 'text-[#617370] hover:text-[#0d3035]'
+                }`}
+                title="Dark mode"
+                aria-pressed={isDark}
+              >
+                <Moon size={13} className={isDark ? 'text-[#e8b855]' : 'text-current'} />
+                <span>Dark</span>
+              </button>
+            </div>
 
             {/* Authentication Status / Sign In / Sign Out */}
             {isVerified ? (
@@ -148,14 +247,34 @@ export default function Navbar() {
 
           {/* Mobile Right Bar: Theme Toggle + Menu */}
           <div className="flex sm:hidden items-center gap-2">
-            <button
-              onClick={toggleTheme}
-              type="button"
+            <div
+              className="flex items-center rounded-full border border-[#173e42]/15 dark:border-white/15 bg-black/5 dark:bg-white/5 p-0.5"
+              role="group"
               aria-label="Toggle theme"
-              className="flex items-center justify-center size-9 rounded-full border border-[#173e42]/15 bg-white/60 dark:bg-white/10 text-[#0d3035] dark:text-[#e8b855]"
             >
-              {isDark ? <Sun size={17} /> : <Moon size={17} />}
-            </button>
+              <button
+                type="button"
+                onClick={() => setDark ? setDark(false) : (isDark && toggleTheme())}
+                className={`p-1.5 rounded-full transition-all ${
+                  !isDark ? 'bg-white text-[#ba7c29] shadow-xs' : 'text-[#829794]'
+                }`}
+                title="Light mode"
+                aria-label="Light mode"
+              >
+                <Sun size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setDark ? setDark(true) : (!isDark && toggleTheme())}
+                className={`p-1.5 rounded-full transition-all ${
+                  isDark ? 'bg-[#12383e] text-[#e8b855] shadow-xs border border-[#e8b855]/25' : 'text-[#617370]'
+                }`}
+                title="Dark mode"
+                aria-label="Dark mode"
+              >
+                <Moon size={14} />
+              </button>
+            </div>
             <button
               onClick={() => setMenuOpen(!menuOpen)}
               className="rounded-lg border border-[#173e42]/15 p-2 text-[#0d3035] dark:text-[#f6f4ee]"
@@ -203,32 +322,48 @@ export default function Navbar() {
               </button>
             )}
 
-            <nav className="flex flex-col gap-3 text-sm font-semibold">
+            <nav className="flex flex-col gap-2 text-sm font-semibold">
               <Link
                 to="/"
-                onClick={() => setMenuOpen(false)}
-                className="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5"
+                onClick={scrollToTop}
+                className={`p-2.5 rounded-xl transition ${
+                  pathname === '/' && activeSection === 'overview'
+                    ? 'bg-[#ba7c29]/10 text-[#ba7c29] dark:bg-[#e8b855]/15 dark:text-[#e8b855] font-bold'
+                    : 'text-[#536866] dark:text-[#95a9a6] hover:bg-black/5 dark:hover:bg-white/5'
+                }`}
               >
                 Overview
               </Link>
               <Link
                 to="/reports"
                 onClick={() => setMenuOpen(false)}
-                className="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5"
+                className={`p-2.5 rounded-xl transition ${
+                  pathname === '/reports'
+                    ? 'bg-[#ba7c29]/10 text-[#ba7c29] dark:bg-[#e8b855]/15 dark:text-[#e8b855] font-bold'
+                    : 'text-[#536866] dark:text-[#95a9a6] hover:bg-black/5 dark:hover:bg-white/5'
+                }`}
               >
                 Incident Registry
               </Link>
               <a
                 href="/#accountability"
-                onClick={() => setMenuOpen(false)}
-                className="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5"
+                onClick={(e) => scrollToSection(e, 'accountability')}
+                className={`p-2.5 rounded-xl transition ${
+                  pathname === '/' && activeSection === 'accountability'
+                    ? 'bg-[#ba7c29]/10 text-[#ba7c29] dark:bg-[#e8b855]/15 dark:text-[#e8b855] font-bold'
+                    : 'text-[#536866] dark:text-[#95a9a6] hover:bg-black/5 dark:hover:bg-white/5'
+                }`}
               >
                 Public Dashboard
               </a>
               <a
                 href="/#how-it-works"
-                onClick={() => setMenuOpen(false)}
-                className="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5"
+                onClick={(e) => scrollToSection(e, 'how-it-works')}
+                className={`p-2.5 rounded-xl transition ${
+                  pathname === '/' && activeSection === 'how-it-works'
+                    ? 'bg-[#ba7c29]/10 text-[#ba7c29] dark:bg-[#e8b855]/15 dark:text-[#e8b855] font-bold'
+                    : 'text-[#536866] dark:text-[#95a9a6] hover:bg-black/5 dark:hover:bg-white/5'
+                }`}
               >
                 How it works
               </a>

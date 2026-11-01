@@ -204,14 +204,38 @@ export default function AuthPage() {
       <section className="flex min-h-screen flex-col px-6 py-8 sm:px-12 lg:px-16 overflow-y-auto">
         <div className="flex items-center justify-between">
           <Brand />
-          <button
-            onClick={toggleTheme}
-            type="button"
-            aria-label="Toggle visual theme"
-            className="flex items-center justify-center size-9 rounded-full border border-[#173e42]/15 bg-white/60 dark:bg-white/10 text-[#0d3035] dark:text-[#e8b855] transition hover:bg-white"
+          <div
+            className="inline-flex items-center rounded-full border border-[#173e42]/15 dark:border-white/15 bg-black/5 dark:bg-white/5 p-0.5"
+            role="group"
+            aria-label="Color scheme theme"
           >
-            {isDark ? <Sun size={16} /> : <Moon size={16} />}
-          </button>
+            <button
+              type="button"
+              onClick={() => isDark && toggleTheme()}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all ${
+                !isDark
+                  ? 'bg-white text-[#ba7c29] shadow-xs'
+                  : 'text-[#829794] hover:text-[#f6f4ee]'
+              }`}
+              title="Light mode"
+            >
+              <Sun size={13} className={!isDark ? 'text-[#ba7c29]' : 'text-current'} />
+              <span>Light</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => !isDark && toggleTheme()}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all ${
+                isDark
+                  ? 'bg-[#12383e] text-[#e8b855] shadow-xs border border-[#e8b855]/25'
+                  : 'text-[#617370] hover:text-[#0d3035]'
+              }`}
+              title="Dark mode"
+            >
+              <Moon size={13} className={isDark ? 'text-[#e8b855]' : 'text-current'} />
+              <span>Dark</span>
+            </button>
+          </div>
         </div>
 
         <div className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center py-8">

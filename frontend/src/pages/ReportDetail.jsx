@@ -56,7 +56,7 @@ export default function ReportDetail() {
   // Resolve modal/form state
   const [showResolveForm, setShowResolveForm] = useState(false)
   const [resolveNotes, setResolveNotes] = useState('')
-  const [resolveActor, setResolveActor] = useState('Municipal Works Inspector')
+  const [resolveActor, setResolveActor] = useState('')
   const [resolveProofFile, setResolveProofFile] = useState(null)
   const [resolveProofPreview, setResolveProofPreview] = useState(null)
   const [resolving, setResolving] = useState(false)
@@ -139,10 +139,10 @@ export default function ReportDetail() {
   }, [id, report?.triage_status])
 
   useEffect(() => {
-    if (id) {
+    if (id && report && report.triage_status === 'done' && !['spam', 'suspicious'].includes(report.authenticity)) {
       fetchExplanation(selectedLang)
     }
-  }, [id, selectedLang])
+  }, [id, selectedLang, report?.triage_status, report?.authenticity])
 
   // Cleanup speech synthesis on component unmount
   useEffect(() => {
@@ -255,7 +255,7 @@ export default function ReportDetail() {
       const fd = new FormData()
       fd.append('status', 'resolved')
       fd.append('resolution_notes', resolveNotes)
-      fd.append('actor', resolveActor)
+      if (resolveActor && resolveActor.trim()) fd.append('actor', resolveActor.trim())
       if (resolveProofFile) fd.append('media', resolveProofFile)
 
       const { data } = await axios.post(`/api/reports/${id}/resolve`, fd)
@@ -490,7 +490,7 @@ export default function ReportDetail() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 pl-6 sm:pl-0">
-                  {user && (user.id === report.citizen_id || (user.email && report.citizen_email && user.email.toLowerCase() === report.citizen_email.toLowerCase())) && !report.appeal_submitted && (
+                  {report.is_owner && !report.appeal_submitted && (
                     <button
                       type="button"
                       onClick={async () => {
@@ -572,7 +572,7 @@ export default function ReportDetail() {
           )}
 
           {/* Audio Evidence */}
-          {report.media_url && report.media_url.match(/\.(mp3|wav|ogg|m4a)$/i) && (
+          {report.media_url && report.media_url.match(/\.(mp3|wav|ogg|m4a|webm|mp4|aac|opus)$/i) && (
             <div className="mb-6 rounded-2xl border border-[#173e42]/15 bg-[#f8f8f4] dark:bg-[#06181b] p-4">
               <span className="block text-xs font-bold text-[#0d3035] dark:text-[#f6f4ee] mb-2">
                 CITIZEN AUDIO TESTIMONIAL RECORD
@@ -689,7 +689,7 @@ export default function ReportDetail() {
                 </p>
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
                   <span>Language: <strong className="text-slate-700 dark:text-slate-300">{SUPPORTED_LANGS.find(l => l.code === selectedLang)?.native}</strong></span>
-                  <span className="text-[10px] font-mono text-teal-700 dark:text-teal-400">Verified Jan Aawaz Docket Brief</span>
+                  <span className="text-[10px] font-mono text-teal-700 dark:text-teal-400">AI-generated summary</span>
                 </div>
               </div>
             ) : (
@@ -954,7 +954,7 @@ export default function ReportDetail() {
                       DEPARTMENTAL DISPATCH TRANSMISSION
                     </p>
                     <span className="rounded-full bg-[#e3f0ea] dark:bg-[#123830] px-2 py-0.5 text-[10px] font-bold text-[#2f7661] dark:text-[#70b99e]">
-                      {dispatches.length} {dispatches.length === 1 ? 'Notice' : 'Notices'} Transmitted
+                      {dispatches.length} {dispatches.length === 1 ? 'Notice' : 'Notices'}{dispatches[0].sent ? ' Transmitted' : ''}
                     </span>
                   </div>
                   <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#0d3035] dark:text-[#f6f4ee]">
@@ -977,7 +977,12 @@ export default function ReportDetail() {
 
             {/* Note on transmission destination */}
             <p className="text-xs text-[#6e807e] dark:text-[#95a9a6]">
-              Sent to the configured dispatch inbox (<strong className="font-mono text-[#0d3035] dark:text-[#e8b855]">{dispatches[0].to_email}</strong>) on {new Date(dispatches[0].created_at).toLocaleString()}.
+              {dispatches[0].sent
+                ? (dispatches[0].mode === 'demo'
+                    ? 'Sent (demo inbox)'
+                    : `Sent to ${dispatches[0].recipient_office || 'department'}`)
+                : 'Not sent'
+              } on {new Date(dispatches[0].created_at).toLocaleString()}.
             </p>
 
             {/* Latest Dispatch Letter Presentation */}
@@ -1002,7 +1007,7 @@ export default function ReportDetail() {
                   VERIFIED CLOSEOUT AUDIT
                 </p>
                 <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#0d3035] dark:text-[#f6f4ee]">
-                  Remediation Closeout Proof
+                  Closeout Audit
                 </h2>
               </div>
               {report.resolved_at && (
@@ -1019,20 +1024,22 @@ export default function ReportDetail() {
                   ? 'bg-[#e7f5ee] dark:bg-[#102b23] border-[#347161]/30 text-[#1b5042] dark:text-[#82c9b6]'
                   : report.resolution_verdict === 'partially_fixed'
                   ? 'bg-[#fff5e5] dark:bg-[#2b1f0e] border-[#ba7c29]/30 text-[#855513] dark:text-[#e2b77d]'
-                  : report.resolution_verdict === 'unclear'
-                  ? 'bg-[#f0f4f5] dark:bg-[#122328] border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                  : 'bg-[#fff0ed] dark:bg-[#2b1210] border-[#b04b37]/30 text-[#8a2a19] dark:text-[#f59e90]'
+                  : 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-900/40 text-rose-900 dark:text-rose-200'
               }`}>
                 <div className="flex items-center justify-between font-bold text-xs">
                   <span className="flex items-center gap-2 uppercase tracking-wider text-[11px]">
                     <Sparkles size={14} />
                     AI RESOLUTION AUDIT VERDICT: {report.resolution_verdict.replace('_', ' ').toUpperCase()}
                   </span>
-                  {report.resolution_confidence && (
+                  {!['fixed', 'partially_fixed'].includes(report.resolution_verdict) ? (
+                    <span className="px-2 py-0.5 rounded-full bg-rose-200 dark:bg-rose-900 text-rose-900 dark:text-rose-100 text-[10px] uppercase font-bold tracking-wider">
+                      Closure rejected
+                    </span>
+                  ) : report.resolution_confidence ? (
                     <span className="font-mono text-[10px]">
                       {Math.round(report.resolution_confidence * 100)}% Confidence
                     </span>
-                  )}
+                  ) : null}
                 </div>
                 <p className="leading-relaxed">
                   {report.resolution_explanation}

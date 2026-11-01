@@ -119,6 +119,7 @@ class Dispatch(Base):
     id = Column(String(36), primary_key=True)
     report_id = Column(String(36), ForeignKey("reports.id", ondelete="CASCADE"), nullable=False, index=True)
     kind = Column(String(20), nullable=False, default="initial")  # initial | escalation
+    mode = Column(String(20), nullable=False, default="demo")  # demo | live
     to_email = Column(String(255), nullable=False)
     cc_emails = Column(String(500), nullable=True)
     recipient_office = Column(String(200), nullable=True)

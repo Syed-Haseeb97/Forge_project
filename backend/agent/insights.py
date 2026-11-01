@@ -29,6 +29,11 @@ _INSIGHTS_CACHE: Dict[str, Any] = {
 }
 
 
+def invalidate_insights_cache() -> None:
+    _INSIGHTS_CACHE["cached_at"] = None
+    _INSIGHTS_CACHE["data"] = None
+
+
 def _get_client() -> Optional[genai.Client]:
     key = os.getenv("GEMINI_API_KEY")
     if not key or key == "your_api_key_here":
@@ -93,18 +98,21 @@ async def generate_civic_insights(force_refresh: bool = False) -> Dict[str, Any]
             cached_data["cached_until"] = (_INSIGHTS_CACHE["cached_at"] + timedelta(seconds=600)).isoformat()
             return cached_data
 
-    # 2. Query all reports from live DB (Phase M: exclude spam)
+    # 2. Query all reports from live DB (Phase N: public visibility excludes spam & suspicious)
     from sqlalchemy import or_
     async with AsyncSessionLocal() as session:
         stmt = select(Report).where(
-            or_(Report.authenticity != "spam", Report.authenticity.is_(None))
+            or_(
+                Report.authenticity.in_(["genuine", "unchecked"]),
+                Report.authenticity.is_(None),
+            )
         ).order_by(Report.created_at.desc())
         res = await session.execute(stmt)
         reports = res.scalars().all()
 
     total_count = len(reports)
 
-    # Rule: If fewer than 3 reports, return "not enough data yet"
+    # Rule: If fewer than 3 reports, return "not enough data yet" (cache for max 30s)
     if total_count < 3:
         not_enough = {
             "status": "not_enough_data",
@@ -115,7 +123,7 @@ async def generate_civic_insights(force_refresh: bool = False) -> Dict[str, Any]
             "recurring_locations": [],
             "brief": "not enough data yet",
             "recommended_actions": [],
-            "cached_until": (now + timedelta(seconds=600)).isoformat(),
+            "cached_until": (now + timedelta(seconds=30)).isoformat(),
         }
         _INSIGHTS_CACHE["cached_at"] = now
         _INSIGHTS_CACHE["data"] = not_enough

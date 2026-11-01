@@ -9,23 +9,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DEFAULT_SLA_MAP = {
-    "critical": 24,   # 24 hours (immediate hazard)
-    "high": 72,       # 3 days
-    "medium": 168,    # 7 days
-    "low": 336,       # 14 days
-}
-
-ROUTING_MAP = {
-    "road_damage": "Public Works Department",
-    "bridge_damage": "Civil Engineering Division",
-    "water_leak": "Water & Sewage Authority",
-    "pollution": "Environmental Protection Agency",
-    "streetlight": "Electricity Board",
-    "garbage": "Municipal Sanitation Department",
-    "drainage": "Storm Water Management",
-    "other": "General Civic Administration",
-}
+from config import ROUTING_MAP, DEFAULT_SLA_MAP
 
 SEVERITY_PROMPT = """You are an advanced municipal civic infrastructure triage and safety assessment AI.
 Analyze this civic issue report and provide structured JSON assessment.
@@ -113,6 +97,7 @@ async def analyze_report(
     media_mime: Optional[str] = None,
     db_session=None,
     on_step=None,
+    skip_gate: bool = False,
 ) -> Dict[str, Any]:
     """Execute the Jan Aawaz multi-signal agentic triage pipeline.
     
@@ -134,4 +119,5 @@ async def analyze_report(
         media_mime=media_mime,
         db_session=db_session,
         on_step=on_step,
+        skip_gate=skip_gate,
     )

@@ -9,13 +9,14 @@ import time
 import uuid
 import csv
 import io
+import re
 import asyncio
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Response, Depends, BackgroundTasks, Request
+from fastapi import FastAPI, status, UploadFile, File, Form, HTTPException, Query, Response, Depends, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -34,9 +35,9 @@ from agent.watchdog import (
     get_sla_time_scale,
     is_watchdog_running,
 )
-from agent.verification import verify_repair_evidence
+from agent.verification import verify_repair_evidence, _load_original_bytes
 from agent.explainer import generate_plain_language_explanation
-from agent.insights import generate_civic_insights
+from agent.insights import generate_civic_insights, invalidate_insights_cache
 from agent.schemas import ExplanationOut
 from agent.tokens import generate_tracking_token
 from email_service import send_tracking_email
@@ -149,7 +150,6 @@ async def health_check():
 class ReportOut(BaseModel):
     id: str
     docket_no: Optional[str] = None
-    tracking_token: Optional[str] = None
     title: str
     description: str
     category: str
@@ -187,11 +187,16 @@ class ReportOut(BaseModel):
     authenticity_reason: Optional[str] = None
     authenticity_confidence: Optional[float] = None
     appeal_submitted: Optional[bool] = False
+    is_owner: bool = False
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class ReportCreatedOut(ReportOut):
+    tracking_token: str
 
 
 class ReportTraceOut(BaseModel):
@@ -204,6 +209,9 @@ class ReportTraceOut(BaseModel):
     agent_trace: List[Dict[str, Any]] = []
     is_complete: bool
     needs_human_review: bool = False
+    authenticity: Optional[str] = "unchecked"
+    authenticity_reason: Optional[str] = None
+    authenticity_confidence: Optional[float] = None
 
 
 class DispatchOut(BaseModel):
@@ -216,6 +224,7 @@ class DispatchOut(BaseModel):
     subject: str
     body: str
     sent: bool
+    mode: Optional[str] = "demo"
     created_at: datetime
 
     class Config:
@@ -353,6 +362,40 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return R * c
 
 
+
+EMAIL_REGEX = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b')
+
+
+def sanitize_actor(actor_str: Optional[str]) -> str:
+    if not actor_str:
+        return "System"
+    if "@" in actor_str:
+        lower = actor_str.lower()
+        if any(k in lower for k in ["admin", "comm", "auth", "officer", "govt", "gov"]):
+            return "Authority"
+        return "Citizen"
+    return actor_str
+
+
+def sanitize_timeline_note(note_str: Optional[str]) -> str:
+    if not note_str:
+        return ""
+    # Strip parenthesized email addresses e.g. (commr.trichy@tn.gov.in)
+    s = re.sub(r'\s*\([^)]*@[^)]*\)', '', note_str)
+    # Replace any remaining email string with [masked]
+    s = EMAIL_REGEX.sub('[masked]', s)
+    return s
+
+
+def mask_emails_in_text(text: Optional[str]) -> Optional[str]:
+    if not text:
+        return text
+    from agent.directory import mask_email
+    def _repl(m):
+        return mask_email(m.group(0))
+    return EMAIL_REGEX.sub(_repl, text)
+
+
 async def log_timeline(
     session,
     report_id: str,
@@ -362,11 +405,12 @@ async def log_timeline(
     notes: Optional[str] = None,
     media_url: Optional[str] = None,
 ):
+    clean_actor = sanitize_actor(actor)
     entry = ReportTimeline(
         id=str(uuid.uuid4()),
         report_id=report_id,
         status=status,
-        actor=actor,
+        actor=clean_actor,
         action_type=action_type,
         notes=notes,
         media_url=media_url,
@@ -887,7 +931,7 @@ async def run_background_triage(
 
 
 # ── Core Routes ────────────────────────────────────────────────────────────────
-@app.post("/api/reports", response_model=ReportOut)
+@app.post("/api/reports", response_model=ReportCreatedOut)
 async def submit_report(
     background_tasks: BackgroundTasks,
     title: str = Form(...),
@@ -1030,6 +1074,8 @@ async def submit_report(
                 tracking_url=track_url,
             )
 
+        invalidate_insights_cache()
+
         # Enqueue background triage pipeline
         background_tasks.add_task(
             run_background_triage,
@@ -1044,6 +1090,8 @@ async def submit_report(
             media.content_type if media else None,
         )
 
+        report.is_owner = True
+        report.tracking_token = tracking_token
         return report
 
 
@@ -1076,6 +1124,9 @@ async def get_report_trace(report_id: str):
             agent_trace=trace_data,
             is_complete=(report.triage_status in ["done", "failed"]),
             needs_human_review=bool(report.needs_human_review),
+            authenticity=report.authenticity or "unchecked",
+            authenticity_reason=report.authenticity_reason,
+            authenticity_confidence=report.authenticity_confidence,
         )
 
 
@@ -1114,11 +1165,39 @@ async def list_reports(
     search: Optional[str] = Query(None),
     limit: int = Query(100),
     offset: int = Query(0),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user),
 ):
-    from sqlalchemy import select, and_
+    from sqlalchemy import select, and_, or_, func
 
-    from sqlalchemy import or_
-    filters = [or_(Report.authenticity != "spam", Report.authenticity.is_(None))]
+    is_authority = bool(current_user and current_user.get("role") == "authority")
+    current_email = (current_user.get("sub") or "").strip().lower() if current_user else None
+    current_user_id = current_user.get("user_id") if current_user else None
+
+    # Base public filter: only genuine, unchecked, or NULL
+    public_auth_filter = or_(
+        Report.authenticity.in_(["genuine", "unchecked"]),
+        Report.authenticity.is_(None)
+    )
+
+    if is_authority:
+        auth_filter = None
+    elif current_user:
+        # Citizen owner can also see their own suspicious / spam reports
+        owner_clauses = []
+        if current_user_id:
+            owner_clauses.append(Report.citizen_id == current_user_id)
+        if current_email:
+            owner_clauses.append(func.lower(Report.citizen_email) == current_email)
+        if owner_clauses:
+            auth_filter = or_(public_auth_filter, *owner_clauses)
+        else:
+            auth_filter = public_auth_filter
+    else:
+        auth_filter = public_auth_filter
+
+    filters = []
+    if auth_filter is not None:
+        filters.append(auth_filter)
     if status:
         filters.append(Report.status == StatusEnum(status))
     if severity:
@@ -1136,6 +1215,13 @@ async def list_reports(
                 r for r in reports
                 if s in r.title.lower() or s in r.description.lower() or s in r.location.lower()
             ]
+        for r in reports:
+            r.is_owner = bool(
+                current_user and (
+                    (current_user_id and r.citizen_id == current_user_id) or
+                    (current_email and (r.citizen_email or "").strip().lower() == current_email)
+                )
+            )
         return reports
 
 
@@ -1238,7 +1324,7 @@ async def export_reports(
     from sqlalchemy import select, and_
 
     from sqlalchemy import or_
-    filters = [or_(Report.authenticity != "spam", Report.authenticity.is_(None))]
+    filters = [or_(Report.authenticity.in_(["genuine", "unchecked"]), Report.authenticity.is_(None))]
     if status:
         filters.append(Report.status == StatusEnum(status))
     if severity:
@@ -1289,7 +1375,10 @@ async def export_reports(
 
 
 @app.get("/api/reports/lookup", response_model=ReportOut)
-async def lookup_report(q: str = Query(..., description="Docket number, UUID, or 8-char ID prefix")):
+async def lookup_report(
+    q: str = Query(..., description="Docket number, UUID, or 8-char ID prefix"),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user),
+):
     query = q.strip()
     if not query:
         raise HTTPException(status_code=400, detail="Search query 'q' cannot be empty.")
@@ -1303,6 +1392,9 @@ async def lookup_report(q: str = Query(..., description="Docket number, UUID, or
         )
         rep_tok = res_tok.scalars().first()
         if rep_tok:
+            c_email = (current_user.get("sub") or "").strip().lower() if current_user else None
+            c_uid = current_user.get("user_id") if current_user else None
+            rep_tok.is_owner = bool(current_user and ((c_uid and rep_tok.citizen_id == c_uid) or (c_email and (rep_tok.citizen_email or "").strip().lower() == c_email)))
             return rep_tok
 
         # 1. Direct docket_no match (case-insensitive)
@@ -1360,26 +1452,19 @@ async def public_track_ticket(token: str, request: Request):
         raise HTTPException(status_code=400, detail="Tracking token cannot be empty.")
 
     async with AsyncSessionLocal() as session:
-        # Match by tracking_token first
+        # Match by tracking_token strictly
         res = await session.execute(
             select(Report).where(func.upper(Report.tracking_token) == clean_token)
         )
         report = res.scalars().first()
 
-        # Fallback: support looking up by docket_no as well
-        if not report:
-            res = await session.execute(
-                select(Report).where(func.upper(Report.docket_no) == clean_token)
-            )
-            report = res.scalars().first()
-
         if not report:
             raise HTTPException(
                 status_code=404,
-                detail=f"Tracking reference '{token}' not found in active records. Please check the token sent in your email.",
+                detail=f"Tracking token '{token}' not found. Please verify the code from your confirmation notice.",
             )
 
-        # Timeline (strictly zero PII)
+        # Timeline (strictly zero PII & sanitized)
         t_res = await session.execute(
             select(ReportTimeline).where(ReportTimeline.report_id == report.id).order_by(ReportTimeline.created_at.asc())
         )
@@ -1387,9 +1472,9 @@ async def public_track_ticket(token: str, request: Request):
         clean_timeline = [
             {
                 "status": t.status,
-                "actor": t.actor,
+                "actor": sanitize_actor(t.actor),
                 "action_type": t.action_type,
-                "notes": t.notes,
+                "notes": sanitize_timeline_note(t.notes),
                 "media_url": t.media_url,
                 "created_at": t.created_at.isoformat() if t.created_at else None,
             }
@@ -1405,13 +1490,21 @@ async def public_track_ticket(token: str, request: Request):
 
         dispatch_info = None
         if latest_dispatch:
-            from agent.directory import mask_email
+            recip_office = latest_dispatch.recipient_office or report.routed_to or "Municipal Engineering Division"
+            disp_mode = getattr(latest_dispatch, "mode", "demo") or "demo"
+            if not latest_dispatch.sent:
+                status_text = "Not sent (provider error)"
+            elif disp_mode == "demo":
+                status_text = f"DEMO: routed to team test inbox; in live mode this would go to {recip_office}"
+            else:
+                status_text = f"Sent to {recip_office}"
+
             dispatch_info = {
-                "designation": latest_dispatch.recipient_office or report.routed_to or "Municipal Engineering Division",
+                "designation": recip_office,
                 "time_sent": latest_dispatch.created_at.isoformat() if latest_dispatch.created_at else None,
                 "provider_accepted": bool(latest_dispatch.sent),
-                "status_text": "Sent to municipal authority" if latest_dispatch.sent else "Transmission queued",
-                "masked_recipient": mask_email(latest_dispatch.to_email),
+                "status_text": status_text,
+                "masked_recipient": None,
             }
 
         # Calculate SLA countdown
@@ -1466,13 +1559,24 @@ async def public_track_ticket(token: str, request: Request):
 
 
 @app.get("/api/reports/{report_id}", response_model=ReportOut)
-async def get_report(report_id: str):
+async def get_report(
+    report_id: str,
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user),
+):
     from sqlalchemy import select
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(Report).where(Report.id == report_id))
         report = result.scalar_one_or_none()
         if not report:
             raise HTTPException(404, "Report not found")
+        current_email = (current_user.get("sub") or "").strip().lower() if current_user else None
+        current_user_id = current_user.get("user_id") if current_user else None
+        report.is_owner = bool(
+            current_user and (
+                (current_user_id and report.citizen_id == current_user_id) or
+                (current_email and (report.citizen_email or "").strip().lower() == current_email)
+            )
+        )
         return report
 
 
@@ -1486,7 +1590,11 @@ async def get_report_timeline(report_id: str):
             .where(ReportTimeline.report_id == report_id)
             .order_by(ReportTimeline.created_at.asc())
         )
-        return result.scalars().all()
+        entries = result.scalars().all()
+        for e in entries:
+            e.actor = sanitize_actor(e.actor)
+            e.notes = sanitize_timeline_note(e.notes)
+        return entries
 
 
 @app.patch("/api/reports/{report_id}/status")
@@ -1506,7 +1614,7 @@ async def update_status(
         )
 
     authority_email = current_authority.get("sub", "authority")
-    authority_actor = actor or f"Authority ({authority_email})"
+    authority_actor = actor or "Authority"
 
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(Report).where(Report.id == report_id))
@@ -1549,7 +1657,8 @@ async def get_authority_priority_queue(
             select(Report).where(
                 and_(
                     Report.status.in_([StatusEnum.open, StatusEnum.in_progress]),
-                    or_(Report.authenticity != "spam", Report.authenticity.is_(None)),
+                    or_(Report.authenticity.in_(["genuine", "unchecked"]), Report.authenticity.is_(None)),
+                    Report.needs_human_review.is_(False),
                 )
             )
         )
@@ -1564,9 +1673,10 @@ async def get_authority_priority_queue(
             ).order_by(Report.created_at.desc())
         )
         held_reports = held_res.scalars().all()
+        held_items_out = [ReportOut.model_validate(r) for r in held_reports]
 
         if not reports:
-            return AuthorityQueueOut(total_queued=0, items=[], crew_batches=[])
+            return AuthorityQueueOut(total_queued=0, items=[], crew_batches=[], held_items=held_items_out)
 
         # 1. Precalculate 300m hotspot counts
         geo_reports = [r for r in reports if r.latitude is not None and r.longitude is not None]
@@ -1747,7 +1857,7 @@ async def resolve_report_with_proof(
     """Closeout ticket with verified resolution notes and photographic completion proof (Authority only)"""
     from sqlalchemy import select
     authority_email = current_authority.get("sub", "authority")
-    authority_actor = actor or f"Authority ({authority_email})"
+    authority_actor = actor or "Authority"
 
     if not media or not media.filename:
         raise HTTPException(
@@ -1874,13 +1984,46 @@ async def upvote_report(
 
 
 @app.get("/api/reports/{report_id}/dispatches", response_model=List[DispatchOut])
-async def list_report_dispatches(report_id: str):
+async def list_report_dispatches(
+    report_id: str,
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user),
+):
     """Fetch formal dispatch letters and escalation transmissions for a docket."""
+    is_authority = bool(current_user and current_user.get("role") == "authority")
+    from agent.directory import mask_email
+
     async with AsyncSessionLocal() as session:
         res = await session.execute(
             select(Dispatch).where(Dispatch.report_id == report_id).order_by(Dispatch.created_at.desc())
         )
-        return res.scalars().all()
+        dispatches = res.scalars().all()
+        out = []
+        for d in dispatches:
+            to_addr = d.to_email
+            cc_addrs = d.cc_emails
+            body_txt = d.body
+            if not is_authority:
+                to_addr = mask_email(to_addr) if to_addr else to_addr
+                if cc_addrs:
+                    cc_addrs = ", ".join(mask_email(c.strip()) for c in cc_addrs.split(",") if c.strip())
+                body_txt = mask_emails_in_text(body_txt)
+
+            out.append(
+                DispatchOut(
+                    id=d.id,
+                    report_id=d.report_id,
+                    kind=d.kind,
+                    to_email=to_addr,
+                    cc_emails=cc_addrs,
+                    recipient_office=d.recipient_office,
+                    subject=d.subject,
+                    body=body_txt,
+                    sent=d.sent,
+                    mode=getattr(d, "mode", "demo") or "demo",
+                    created_at=d.created_at,
+                )
+            )
+        return out
 
 
 @app.post("/api/reports/{report_id}/feedback", response_model=ReportOut)
@@ -1913,7 +2056,7 @@ async def submit_citizen_feedback(
                 session=session,
                 report_id=report_id,
                 status=StatusEnum.in_progress.value,
-                actor=f"Citizen ({citizen_email})",
+                actor="Citizen",
                 action_type="citizen_disputed",
                 notes=f"Citizen disputed resolution: {payload.notes or 'Reported issue persists on ground.'}",
             )
@@ -1922,7 +2065,7 @@ async def submit_citizen_feedback(
                 session=session,
                 report_id=report_id,
                 status=report.status.value,
-                actor=f"Citizen ({citizen_email})",
+                actor="Citizen",
                 action_type="citizen_confirmed",
                 notes=f"Citizen confirmed resolution: {payload.notes or 'Work completed satisfactorily.'}",
             )
@@ -1979,6 +2122,7 @@ async def explain_report(
 
         report_dict = {
             "id": report.id,
+            "docket_no": report.docket_no,
             "title": report.title,
             "description": report.description,
             "category": report.category,
@@ -1992,18 +2136,19 @@ async def explain_report(
             "action_plan": report.action_plan,
         }
 
-        explanation_text = await generate_plain_language_explanation(report_dict, normalized_lang)
+        explanation_text, is_ai_generated = await generate_plain_language_explanation(report_dict, normalized_lang)
 
-        # Cache in explanations table
-        new_exp = Explanation(
-            id=str(uuid.uuid4()),
-            report_id=report_id,
-            lang=normalized_lang,
-            text=explanation_text,
-            created_at=datetime.utcnow(),
-        )
-        session.add(new_exp)
-        await session.commit()
+        # Cache in explanations table ONLY if generated by AI
+        if is_ai_generated:
+            new_exp = Explanation(
+                id=str(uuid.uuid4()),
+                report_id=report_id,
+                lang=normalized_lang,
+                text=explanation_text,
+                created_at=datetime.utcnow(),
+            )
+            session.add(new_exp)
+            await session.commit()
 
         return ExplanationOut(
             report_id=report_id,
@@ -2037,7 +2182,7 @@ async def get_stats():
     from sqlalchemy import select, or_
     async with AsyncSessionLocal() as session:
         result = await session.execute(
-            select(Report).where(or_(Report.authenticity != "spam", Report.authenticity.is_(None)))
+            select(Report).where(or_(Report.authenticity.in_(["genuine", "unchecked"]), Report.authenticity.is_(None)))
         )
         all_reports = result.scalars().all()
 
@@ -2117,7 +2262,7 @@ async def open311_requests(
     """Retrieve service requests in Open311 standard format"""
     from sqlalchemy import select, and_
     from sqlalchemy import or_
-    filters = [or_(Report.authenticity != "spam", Report.authenticity.is_(None))]
+    filters = [or_(Report.authenticity.in_(["genuine", "unchecked"]), Report.authenticity.is_(None))]
     if service_code:
         filters.append(Report.category == service_code)
     if status:
@@ -2184,11 +2329,49 @@ async def override_authenticity(
 
         if verdict == "genuine":
             report.needs_human_review = False
+            # Re-run full triage with skip_gate=True
+            media_bytes = None
+            media_mime = None
+            if report.media_url:
+                try:
+                    loaded = await _load_original_bytes(report.media_url)
+                    if loaded:
+                        media_bytes, media_mime = loaded
+                except Exception as e:
+                    logger.warning(f"Could not load original media for triage re-run: {e}")
+
+            try:
+                analysis = await analyze_report(
+                    title=report.title,
+                    description=report.description,
+                    category=report.category,
+                    location=report.location,
+                    latitude=report.latitude,
+                    longitude=report.longitude,
+                    media_bytes=media_bytes,
+                    media_mime=media_mime,
+                    skip_gate=True,
+                )
+                sev_val = analysis.get("severity", "medium")
+                report.severity = SeverityEnum(sev_val) if isinstance(sev_val, str) else sev_val
+                report.sla_hours = analysis.get("sla_hours", report.sla_hours or 72)
+                report.routed_to = analysis.get("routed_to", report.routed_to)
+                report.action_plan = analysis.get("action_plan", report.action_plan)
+                report.safety_precautions = analysis.get("safety_precautions", report.safety_precautions)
+                report.severity_rationale = analysis.get("severity_rationale", report.severity_rationale)
+                report.confidence = analysis.get("confidence")
+                if analysis.get("agent_trace"):
+                    report.agent_trace = json.dumps(analysis["agent_trace"])
+                report.triage_status = "done"
+            except Exception as e:
+                logger.warning(f"Re-triage failed on approval, applying fallback: {e}")
+                _apply_triage_fallback(report)
+
             await log_timeline(
                 session=session,
                 report_id=report.id,
                 status=report.status.value if hasattr(report.status, "value") else str(report.status),
-                actor=f"Authority ({authority_email})",
+                actor="Authority",
                 action_type="authority_approved",
                 notes=f"Authority approved: {payload.note or 'Report verified as genuine civic issue.'}",
             )
@@ -2203,7 +2386,7 @@ async def override_authenticity(
                 session=session,
                 report_id=report.id,
                 status=report.status.value if hasattr(report.status, "value") else str(report.status),
-                actor=f"Authority ({authority_email})",
+                actor="Authority",
                 action_type="authority_marked_spam",
                 notes=f"Authority marked spam: {payload.note or 'Report classified as non-civic/spam.'}",
             )
@@ -2214,7 +2397,7 @@ async def override_authenticity(
                 session=session,
                 report_id=report.id,
                 status=report.status.value if hasattr(report.status, "value") else str(report.status),
-                actor=f"Authority ({authority_email})",
+                actor="Authority",
                 action_type="authority_flagged_suspicious",
                 notes=f"Authority marked suspicious: {payload.note or 'Held for manual inspection.'}",
             )
@@ -2250,8 +2433,10 @@ async def appeal_authenticity(
         if getattr(report, "appeal_submitted", False):
             raise HTTPException(status_code=400, detail="An appeal has already been submitted for this report.")
 
+        if report.authenticity not in ("suspicious", "spam"):
+            raise HTTPException(status_code=400, detail="Appeal is only allowed for grievances under review or marked as spam.")
+
         appeal_note = (payload.note if payload and payload.note else "Citizen requested authority review of held grievance.")
-        report.authenticity = "suspicious"
         report.needs_human_review = True
         report.appeal_submitted = True
         report.authenticity_reason = f"Appealed by citizen: {appeal_note}"
@@ -2261,10 +2446,11 @@ async def appeal_authenticity(
             session=session,
             report_id=report.id,
             status=report.status.value if hasattr(report.status, "value") else str(report.status),
-            actor="Citizen Reporter",
+            actor="Citizen",
             action_type="appeal_submitted",
             notes=f"Citizen appealed: {appeal_note}",
         )
         await session.commit()
 
-        return {"message": "Appeal submitted successfully", "authenticity": "suspicious"}
+        return {"message": "Appeal submitted successfully", "authenticity": report.authenticity}
+

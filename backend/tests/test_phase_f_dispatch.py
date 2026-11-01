@@ -49,7 +49,7 @@ def test_recipient_resolution_and_fallback():
         escalation_level=0,
     )
     assert fallback["matched"] is False
-    expected_fallback_inbox = os.getenv("DISPATCH_EMAIL", "dispatch@janaawaz.in")
+    expected_fallback_inbox = os.getenv("DISPATCH_EMAIL")
     assert fallback["to"] == expected_fallback_inbox
 
 
@@ -103,7 +103,7 @@ def test_demo_mode_never_emails_department():
             from sqlalchemy import select
             tl = (await session.execute(select(ReportTimeline).where(ReportTimeline.report_id == test_id))).scalars().all()
             notes = [t.notes for t in tl]
-            assert any("[Demo mode: routed to test-fallback@janaawaz.in]" in n for n in notes)
+            assert any("DEMO: routed to team test inbox" in n for n in notes)
 
     asyncio.run(_run())
 
@@ -216,8 +216,7 @@ def test_api_track_endpoint_leaks_no_pii(client):
             disp = Dispatch(
                 id=str(uuid.uuid4()),
                 report_id=test_id,
-                kind="initial",
-                to_email="test-inbox@example.com",
+                kind="initial", mode="live", to_email="test-inbox@example.com",
                 recipient_office="Executive Engineer (Water Supply)",
                 subject="Notice: Pavement water pipeline leak",
                 body="Full formal dispatch notice",
@@ -256,3 +255,5 @@ def test_api_track_endpoint_leaks_no_pii(client):
     assert "citizen_name" not in data
     assert "phone" not in data
     assert private_citizen_email not in resp.text
+
+

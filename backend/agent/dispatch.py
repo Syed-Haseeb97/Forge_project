@@ -54,7 +54,8 @@ async def draft_and_send_dispatch(
     - Records actual to/cc, recipient designation, and timeline notes
     """
     dispatch_mode = os.getenv("DISPATCH_MODE", "demo").lower().strip()
-    fallback_inbox = os.getenv("DISPATCH_EMAIL", "dispatch@janaawaz.in")
+    raw_fb = os.getenv("DISPATCH_EMAIL")
+    fallback_inbox = raw_fb.strip() if raw_fb and raw_fb.strip() else None
     public_app_url = os.getenv("PUBLIC_APP_URL", "http://localhost:5173").rstrip("/")
     reply_to = os.getenv("REPLY_TO")
 
@@ -103,7 +104,7 @@ async def draft_and_send_dispatch(
                 return None
 
             # 1. Resolve Recipient from Directory (no DB table)
-            locality_str = report.locality or report.location or ""
+            locality_str = f"{report.location or ''} {report.locality or ''}".strip() or report.location or ""
             recip = resolve_recipient(
                 category=report.category,
                 locality_or_city=locality_str,
@@ -115,7 +116,7 @@ async def draft_and_send_dispatch(
 
             # Determine target TO and CC based on DISPATCH_MODE
             if dispatch_mode == "live":
-                target_to = recip["to"]
+                target_to = recip["to"] or fallback_inbox
                 team_cc_raw = os.getenv("TEAM_CC_EMAILS", "")
                 team_cc_list = [c.strip() for c in team_cc_raw.split(",") if c.strip()]
                 target_cc = list(dict.fromkeys(recip.get("cc", []) + team_cc_list))
@@ -208,7 +209,7 @@ async def draft_and_send_dispatch(
                     f"From: Jan Aawaz Autonomous Civic Triage System\n"
                     f"Date: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}\n\n"
                     f"SUBJECT: Incident Work Order Transmission for Docket #{docket_id}\n\n"
-                    f"Please be advised that an infrastructure failure requiring departmental redressal has been verified:\n"
+                    f"Please be advised that an infrastructure failure requiring departmental redressal has been reported by a citizen and AI-assessed; not field-verified:\n"
                     f"- Title: {report.title}\n"
                     f"- Locality: {locality_str}\n"
                     f"- Location Coordinates: {maps_link}\n"
@@ -243,23 +244,37 @@ async def draft_and_send_dispatch(
             if draft_res.body_regional:
                 full_body += f"\n\n=== {language.upper()} REGIONAL COMPANION ===\n{draft_res.body_regional.strip()}"
 
-            # Transmit via configured email provider without blocking event loop
-            sent = await asyncio.to_thread(
-                send_dispatch_email,
-                to_email=target_to,
-                subject=final_subject,
-                body_text=full_body,
-                cc=target_cc,
-                reply_to=reply_to,
-            )
+                        # Transmit via configured email provider without blocking event loop
+            if not target_to:
+                sent = False
+                timeline_notes = "not sent: DISPATCH_EMAIL not configured"
+            else:
+                sent = await asyncio.to_thread(
+                    send_dispatch_email,
+                    to_email=target_to,
+                    subject=final_subject,
+                    body_text=full_body,
+                    cc=target_cc,
+                    reply_to=reply_to,
+                )
+                if not sent:
+                    timeline_notes = "Not sent (provider error)"
+                elif dispatch_mode == "demo":
+                    timeline_notes = f"DEMO: routed to team test inbox; in live mode this would go to {recipient_office}."
+                elif kind == "escalation" and not is_matched:
+                    timeline_notes = f"Escalation Level {escalation_level}: No higher authority configured; notice logged."
+                else:
+                    cc_str = f" CC: {', '.join(mask_email(c) for c in target_cc)}" if target_cc else ""
+                    timeline_notes = f"Sent to {recipient_office} ({mask_email(target_to)}).{cc_str}"
 
-            # Persist in dispatches table (including cc_emails and recipient_office)
+            # Persist in dispatches table (including cc_emails, mode, and recipient_office)
             dispatch_id = str(uuid.uuid4())
             dispatch_record = Dispatch(
                 id=dispatch_id,
                 report_id=report.id,
                 kind=kind,
-                to_email=target_to,
+                mode=dispatch_mode,
+                to_email=target_to or "unconfigured",
                 cc_emails=",".join(target_cc) if target_cc else None,
                 recipient_office=recipient_office,
                 subject=final_subject,
@@ -268,17 +283,6 @@ async def draft_and_send_dispatch(
                 created_at=datetime.utcnow(),
             )
             session.add(dispatch_record)
-
-            # Determine timeline audit note
-            if is_matched:
-                masked_addr = mask_email(recip["to"])
-                if dispatch_mode == "demo":
-                    timeline_notes = f"Sent to {recipient_office} ({masked_addr}) [Demo mode: routed to {target_to}]."
-                else:
-                    cc_str = f" CC: {', '.join(mask_email(c) for c in target_cc)}" if target_cc else ""
-                    timeline_notes = f"Sent to {recipient_office} ({masked_addr}).{cc_str}"
-            else:
-                timeline_notes = f"no matching department, sent to fallback inbox ({target_to})."
 
             action_type_val = "dispatch_sent" if kind == "initial" else f"escalation_level_{escalation_level}"
             actor_name = "Jan Aawaz Dispatch Agent" if kind == "initial" else "SLA Watchdog Agent"

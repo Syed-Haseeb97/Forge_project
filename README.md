@@ -11,82 +11,91 @@
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ecf8e.svg?style=flat&logo=supabase)](https://supabase.com)
 [![Open311](https://img.shields.io/badge/Open311-GeoReport_v2-e8b855.svg?style=flat)](https://www.open311.org)
 
-🔗 **Live Production Demo**: [https://janaawaz.vercel.app](https://janaawaz.vercel.app) *(Demo Deployment Placeholder)*  
-🎬 **3-Minute Walkthrough Video**: [https://youtu.be/placeholder](https://youtu.be/placeholder) *(Judging Video Placeholder)*
+🌐 **Live Production Demo**: `TODO: fill`  
+📺 **Walkthrough Video**: `TODO: fill`
 
 ---
 
-## 📌 The Problem
+## 🎯 The Problem
 
 Civic grievances in municipal jurisdictions across India face systemic challenges:
 1. **The Bureaucratic Black Hole**: Citizens submit complaints with little visibility into which engineering department received them, who is assigned, or when repairs will occur.
-2. **Missing Multi-Signal Urgency Triage**: A pothole next to an active primary school during monsoon season is exponentially more hazardous than a cosmetic crack on a suburban curb, yet existing systems treat them as equal tickets.
+2. **Missing Multi-Signal Urgency Triage**: A pothole next to an active primary school during monsoon season is exponentially more hazardous than a cosmetic crack on a suburban curb, yet traditional systems treat them as equal tickets.
 3. **Absence of Enforceable SLAs**: Citizens have no clear Service Level Agreements (SLAs), and complaints linger indefinitely without automated escalation.
-4. **Fraudulent Closures**: Dishonest contractors frequently mark dockets "resolved" using false claims or unrelated photos taken miles away.
-5. **Language & Linguistic Barriers**: Technical municipal portals are overwhelmingly English-first, excluding non-English speaking citizens from understanding administrative actions.
+4. **Spam & Non-Civic Abuse**: Triage teams spend hours sorting out frivolous submissions, memes, and tests without automated authenticity screening.
+5. **Fraudulent Closures**: Dishonest contractors frequently mark dockets "resolved" using false claims or unrelated photos.
+6. **Linguistic Barriers**: Municipal systems are English-first, excluding non-English speaking citizens from understanding administrative actions.
 
 ---
 
 ## 💡 The Solution
 
 **Jan Aawaz (जनAawaz)** transforms civic grievance management into an **autonomous, agentic, multi-signal intelligence pipeline**:
-- **Multi-Signal Context Correlation**: Correlates visual evidence with live microclimate weather forecasts, OpenStreetMap sensitive site queries (schools, clinics within 250m), and live database recurrence to assign dynamic SLAs (24h to 336h).
-- **Autonomous Dispatch Agent**: Automatically drafts formal municipal work orders in English and regional languages with direct Google Maps coordinate links.
-- **Automated SLA Watchdog**: Runs an autonomous background loop escalating overdue tickets across tiered notification levels, and ultimately flagging tickets publicly as overdue.
-- **Multimodal AI Resolution Auditing**: Uses computer vision to audit "after-photos" against baseline defect photos, strictly rejecting closures if the issue remains unresolved.
+- **8-Step Agentic Triage**: Correlates visual evidence with live microclimate weather forecasts, OpenStreetMap sensitive sites (schools, clinics within 250m), recurrence analysis, and an AI Critic audit before assigning dynamic SLAs (24h to 336h).
+- **AI Authenticity Gate**: Screens submissions with prompt isolation (`<report>` boundary) and physical EXIF GPS facts to catch spam while preserving genuine local-language complaints.
+- **Privacy-Preserving Public Tracking**: Generates high-entropy tracking tokens (`JA-TRK-XXXX-XXXX`) allowing citizens to monitor live countdowns, timeline audits, and dispatch notices without exposing personal contact info.
+- **Autonomous Dispatch Agent**: Resolves real departmental contacts (with demo mode safety to a team inbox) and generates formal municipal work orders with Google Maps coordinates.
+- **Automated SLA Watchdog**: Autonomous background worker escalating overdue tickets across tiered notification levels.
+- **Multimodal AI Resolution Auditing**: Compares "after-photos" against baseline defect photos with Gemini Vision, strictly rejecting closures if the issue remains unresolved.
 - **Multilingual Plain-Language Explainer (जन संवाद)**: Empowers residents across 8 Indian languages with plain-language summaries and browser-based audio narration via the Web Speech API.
-- **Strict Zero-Dummy-Data Architecture**: All analytics, map hotspots, and metrics are computed dynamically from real database submissions, live APIs, and open datasets.
+- **Strict Zero-Dummy-Data Architecture**: All analytics, map hotspots, and metrics are computed dynamically from real database records, live APIs, and open datasets.
 
 ---
 
-## 🌟 Key Features
+## 🤖 Where AI is Used in Jan Aawaz
 
-| Capability | Technical Implementation | Public Benefit |
-|---|---|---|
-| **Multimodal Ingestion** | Gemini 2.5 Flash Async Client + `python-multipart` | Accepts photos, voice testimonials, and GPS pins without form fatigue. |
-| **6-Step Agentic Triage** | Nominatim + Open-Meteo + Overpass API (250m) + Gemini | Context-aware severity scoring that cites weather risks and nearby schools. |
-| **Auto-Fill from Photo/Voice** | `POST /api/ai/prefill` structured vision extraction | Pre-populates title, category, description, and detected language. |
-| **Autonomous Dispatch** | Background asynchronous worker + SMTP SSL | Issues formal municipal work orders with coordinate links upon submission. |
-| **SLA Watchdog Worker** | Asyncio background worker with `SLA_TIME_SCALE` | Tiered escalation (Dept Head ➔ Commissioner ➔ Overdue flag). |
-| **Resolution Verification** | Multimodal Gemini Vision comparison (Before vs. After) | Prevents fraudulent ticket closure; rejects unverified work orders. |
-| **Resident Dispute Loop** | `POST /api/reports/{id}/feedback` | Residents can confirm completion or dispute to instantly reopen dockets. |
-| **8-Language Explainer** | Gemini + `window.speechSynthesis` (Web Speech API) | Accessible audio briefings in Hindi, Tamil, Telugu, Bengali, Marathi, etc. |
-| **300m Hotspot Clusters** | Dynamic spatial grid clustering ($\approx 0.0027^\circ$) | Visualizes localized infrastructure failure corridors on Leaflet GIS maps. |
-| **Live AI Civic Brief** | Gemini structured summary cached for 10 minutes | Executive summary and 3 prioritized actions synthesized from live DB records. |
-| **Open311 v2 Compliance** | `/api/open311/v2/services.json` & `/requests.json` | Interoperable with international civic platforms (FixMyStreet, Mark-a-Spot). |
+| Feature | Model / Mechanism | Purpose | Fallback / Guardrail |
+|---|---|---|---|
+| **Form Pre-fill** | `gemini-3.5-flash-lite` / `gemini-3.8-flash` | Extracts title, category, description, and detected language from image/audio evidence. | Citizen can review, correct, or manually fill all fields. |
+| **Authenticity Gate** | `gemini-3.5-flash-lite` (Structured JSON) | Evaluates whether submission is a real civic issue; flags jokes, tests, and non-civic content. | Prompt wrapped in `<report>` (untrusted data rule) + EXIF GPS fact; doubtful cases become "suspicious" for human review. |
+| **Evidence Understanding** | `gemini-3.8-flash` Multimodal Vision | Assesses defect type, structural damage, and physical obstruction hazards. | Deterministic category heuristic mapping. |
+| **Correlated Decision** | `gemini-3.8-flash` / `gemini-3.5-flash` | Synthesizes weather risk, sensitive site proximity, and recurrence into severity & SLA. | Default SLA matrix based on category and baseline severity. |
+| **Critic Audit** | `gemini-3.5-flash-lite` | Adversarially audits the triage decision to prevent over-escalation or under-triage. | Preserves original decision if critic call times out. |
+| **Duplicate Detection** | Proximity radius query + text similarity | Detects recurring complaints within 300m to alert citizens and prevent duplicates. | Falls back to coordinate distance filtering if AI unavailable. |
+| **Why-Now Prioritization** | `gemini-3.5-flash-lite` (Structured JSON) | Ranks open issues in the Authority Queue by compounding risk factors. | Sorts by SLA deadline and severity level. |
+| **Work Order Dispatch** | `gemini-3.5-flash` Structured Drafting | Generates formal, courteous municipal work orders with coordinate links and SLA mandates. | Deterministic work order fallback letter template. |
+| **Resolution Vision Audit** | `gemini-3.8-flash` Vision Comparison | Compares "before" and "after" evidence to verify actual repair and reject fraudulent closures. | Flags for manual engineer inspection with closure rejection badge. |
+| **Multilingual Explainer** | `gemini-3.8-flash` Translation & Simplification | Converts technical bureaucratic status into plain language across 8 Indian languages. | Deterministic status template + native Web Speech API. |
+| **AI Civic Pulse Brief** | `gemini-3.5-flash-lite` Synthesis | Analyzes live municipal database telemetry to generate an executive briefing with 3 actions. | Deterministic stats aggregation with 10-minute caching. |
 
 ---
 
-## 🏗️ Agentic Pipeline Architecture
+## 🔄 Agentic Pipeline Architecture
 
 ```mermaid
 flowchart TD
-    subgraph Ingestion["1. Citizen Ingestion"]
-        A[Photo / Audio Evidence + GPS Pin] --> B[FastAPI Gateway]
-        B --> C[PyJWT Authenticated Session]
+    subgraph Ingestion["1. Citizen Ingestion & Privacy"]
+        A["Citizen Photo / Audio Evidence + Coordinates"] --> B["FastAPI Gateway"]
+        B --> C["Assign Docket (JA-2026-XXXXX) & Tracking Token (JA-TRK-XXXX-XXXX)"]
+        C --> D["Send Confirmation Email (Private Token Link)"]
     end
 
-    subgraph AgentPipeline["2. Multi-Signal Correlated Agent Pipeline"]
-        C --> D1[1. Understand Evidence: Gemini Multimodal Vision/Audio]
-        D1 --> D2[2. Reverse Geocoding: Nominatim OSM]
-        D2 --> D3[3. Weather Forecast: Open-Meteo 24h Rain Risk]
-        D3 --> D4[4. Sensitive Sites: Overpass API 250m Schools/Hospitals]
-        D4 --> D5[5. Proximity Recurrence: Live Supabase DB 300m]
-        D5 --> D6[6. Correlated Decision: Gemini Decision & Explicit Rationale]
-        D6 -.->|API Quota / Failure| D7[7. Heuristic Fallback Agent: 'status: fallback']
+    subgraph AgentPipeline["2. 8-Step Correlated Agent Triage (~30s Budget)"]
+        D --> E0["Step 0: Authenticity Gate (Gemini Structured Screening + EXIF GPS Fact)"]
+        E0 -->|Spam / Suspicious| E0H["Held for Review Queue (Hidden from Public Lists & Stats)"]
+        E0 -->|Genuine| E1["Step 1: Understand Evidence (Gemini Multimodal Vision/Audio)"]
+        E1 --> E2["Step 2: Reverse Geocoding (Nominatim OSM)"]
+        E1 --> E3["Step 3: Weather Forecast (Open-Meteo 24h Rain Risk)"]
+        E1 --> E4["Step 4: Sensitive Sites (Overpass API 250m Schools/Hospitals)"]
+        E1 --> E5["Step 5: Proximity Recurrence (Live DB 300m GIS Query)"]
+        E2 & E3 & E4 & E5 --> E6["Step 6: Correlated Decision (Gemini Severity, SLA, Routing & Plan)"]
+        E6 --> E7["Step 7: Critic Audit (Gemini Evaluation of Severity & SLA)"]
+        E7 -.->|Timeout / Fallback| E8["Heuristic Fallback Engine (_apply_triage_fallback)"]
     end
 
-    subgraph AutonomousWorkers["3. Autonomous Background Execution"]
-        D6 --> E1[Draft & Send Municipal Dispatch Letter via SMTP]
-        E1 --> E2[Background Watchdog: Evaluates SLA Escalations Level 1-3]
-        E2 --> E3[Demo Acceleration: SLA_TIME_SCALE Compression]
+    subgraph DispatchAndWatchdog["3. Autonomous Dispatch & SLA Monitoring"]
+        E7 & E8 --> F1["Resolve Recipient Directory (backend/departments.json)"]
+        F1 --> F2{"DISPATCH_MODE"}
+        F2 -->|demo| F3["Send to Team Test Inbox [DEMO]"]
+        F2 -->|live| F4["Send to Department Head + CC Team"]
+        F3 & F4 --> F5["Autonomous Watchdog Loop (Evaluates Escalations L1 -> L2 -> Overdue)"]
     end
 
-    subgraph ResolutionVerification["4. AI Resolution Audit & Public Review"]
-        F1[Authority Submits After-Photo] --> F2[Gemini Vision Comparative Audit]
-        F2 -->|Fixed / Partially Fixed| F3[Ticket Resolved]
-        F2 -->|Not Fixed / Wrong Location| F4[Reject Closure & Keep In Progress]
-        F3 --> F5[Resident On-Site Dispute or Confirmation]
+    subgraph PublicAccountability["4. Public Tracking & AI Resolution Audit"]
+        G1["Public Track (/track/:token)"] --> G2["SLA Countdown, Honest Timeline & Notices (Zero PII)"]
+        H1["Authority Submits After-Photo"] --> H2["Gemini Vision Comparative Audit"]
+        H2 -->|Fixed / Partially Fixed| H3["Ticket Resolved"]
+        H2 -->|Not Fixed / Mismatched| H4["Reject Closure & Log Audit Strike"]
     end
 ```
 
@@ -100,23 +109,19 @@ Jan Aawaz adheres to a **strict zero-dummy-data policy**. Every statistic, map o
 |---|---|---|---|
 | **OpenStreetMap Nominatim** | `https://nominatim.openstreetmap.org/reverse` | Reverse geocoding latitude/longitude to street, locality, and city. | $\le 5.8$s timeout, cached by coordinate rounding, rate-limited to 1 req/sec. |
 | **Open-Meteo Weather** | `https://api.open-meteo.com/v1/forecast` | Live microclimate precipitation and max 24h rainfall probability. | $\le 5.8$s timeout, public API (no key required), graceful zero-rain fallback. |
-| **OpenStreetMap Overpass** | `https://overpass-api.de/api/interpreter` | Overpass QL spatial bounding box query for schools, hospitals, transit hubs within 250m. | $\le 5.8$s timeout, regex-bounded coordinate query, defaults to 0 sites if timed out. |
-| **Supabase PostgreSQL** | `aws-0-eu-west-1.pooler.supabase.com:5432` | Live cloud database storing tickets, dispatches, explanations, and audit logs. | Async SQLAlchemy pooler with automated startup migrations (`ensure_schema()`). |
-| **Google Gemini API** | `client.aio.models.generate_content` | Multimodal visual inspection, correlated reasoning, and multilingual drafting. | $\le 5.8$s async timeout, multi-model fallback list, deterministic heuristic rules. |
+| **OpenStreetMap Overpass** | `https://overpass-api.de/api/interpreter` | Overpass QL spatial query for schools, hospitals, transit hubs within 250m. | $\le 5.8$s timeout, regex-bounded coordinate query, defaults to 0 sites if timed out. |
+| **Supabase PostgreSQL** | `aws-0-eu-west-1.pooler.supabase.com:5432` | Live cloud database storing tickets, dispatches, audit trails, and accounts. | Async SQLAlchemy pooler with automated startup migrations (`ensure_schema()`). |
+| **Google Gemini API** | `client.aio.models.generate_content` | Multimodal inspection, authenticity gate, decision reasoning, and vision audit. | 10–12s per call timeout, 3-model fallback list (`GEMINI_MODELS`), deterministic heuristic fallbacks. |
 | **Web Speech API** | `window.speechSynthesis` | Client-side text-to-speech audio narration using regional Indian voice engines. | Pure browser native API; UI hides button gracefully if unsupported. |
 
 ---
 
 ## 📸 Interface & Audit Screenshots
 
-| Screenshot | Description | Path |
+| Screenshot | Description | File Path |
 |---|---|---|
-| **AI Civic Pulse Brief** | Executive municipal brief with 3 prioritized actions and 10-minute live cache badge. | [`docs/screenshots/dashboard_civic_brief.png`](docs/screenshots/README.md) |
-| **AI Reasoning Trace** | Full multi-signal audit trace citing Open-Meteo rain, Overpass sensitive sites, and SLA rationale. | [`docs/screenshots/agentic_reasoning_trace.png`](docs/screenshots/README.md) |
-| **Plain-Language Explainer** | 8-language citizen summary in Hindi with audio listen control. | [`docs/screenshots/multilingual_explainer_hindi.png`](docs/screenshots/README.md) |
-| **Dispatch Work Order** | Departmental work order letter with Google Maps coordinates and SLA deadline. | [`docs/screenshots/dispatch_letter_modal.png`](docs/screenshots/README.md) |
-| **Multimodal Resolution Audit** | Comparative AI verification audit rejecting incomplete repairs and logging timeline strikes. | [`docs/screenshots/resolution_audit_before_after.png`](docs/screenshots/README.md) |
-| **300m Spatial GIS Hotspots** | Full-screen GIS map view rendering translucent 300-meter circular grievance clusters. | [`docs/screenshots/gis_hotspot_clusters.png`](docs/screenshots/README.md) |
+| **Documentation & Assets Guide** | Screenshot catalog and documentation overview. | [`docs/screenshots/README.md`](docs/screenshots/README.md) |
+| *Product Screenshots* | System screens are captured during live evaluation. | `TODO: fill` |
 
 ---
 
@@ -126,25 +131,30 @@ All system configurations are managed via environment variables documented in [`
 
 | Variable | Default Value | Description |
 |---|---|---|
-| `GEMINI_API_KEY` | *None (Required)* | Google Gemini API Key for multimodal triage and structured reasoning. |
-| `GEMINI_MODELS` | `gemini-3.5-flash-lite,gemini-3.8-flash,gemini-3.5-flash` | Comma-separated list of Gemini models tried in order. |
+| `GEMINI_API_KEY` | *None (Required)* | Google Gemini API Key for multimodal triage, authenticity gating, and reasoning. |
+| `GEMINI_MODELS` | `gemini-3.5-flash-lite,gemini-3.8-flash,gemini-3.5-flash` | Comma-separated list of Gemini models tried in priority order. |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./fordge.db` | Async SQLAlchemy database URL (SQLite locally, asyncpg for Supabase PostgreSQL). |
-| `JWT_SECRET` | *None (Required, >=32 chars)* | Cryptographic secret used to sign 12-hour JWT tokens. Must be >=32 chars unless `DEV_MODE=true`. Generate using: `python -c "import secrets; print(secrets.token_urlsafe(48))"`. |
-| `AUTHORITY_EMAILS` | `""` (Empty list `[]`) | Comma-separated email addresses granted the `authority` role upon authentication. |
-| `DEV_MODE` | `false` | When `true`, enables ephemeral random JWT secret fallback and returns `dev_code` in OTP auth responses for local/testing convenience. |
-| `CORS_ORIGINS` | `http://localhost:5173,http://localhost:3000` | Comma-separated allowed CORS origins (no wildcards with credentials). |
-| `EMAIL_PROVIDER` | `smtp` | Transactional email provider: `smtp` (Gmail SSL) or `resend` (Resend REST API). |
+| `PUBLIC_APP_URL` | `http://localhost:5173` | Public base URL used to construct citizen tracking and ticket links. |
+| `DISPATCH_MODE` | `demo` | `demo` sends work orders to `DISPATCH_EMAIL` labeled `[DEMO]`; `live` sends to resolved municipal recipient. |
+| `DISPATCH_EMAIL` | `dispatch@janaawaz.in` | Fallback and demo recipient inbox for automated work orders. |
+| `TEAM_CC_EMAILS` | `""` | Comma-separated emails to CC on departmental dispatches. |
+| `REPLY_TO` | `""` | Reply-To address ensuring authority responses route back to team coordinators. |
+| `EMAIL_PROVIDER` | `smtp` | Transactional email provider: `smtp` (Gmail SSL), `brevo` (REST API), or `resend` (REST API). |
 | `GMAIL_USER` / `GMAIL_APP_PASSWORD` | *Optional* | Gmail SMTP credentials when `EMAIL_PROVIDER=smtp`. |
-| `RESEND_API_KEY` | *Optional* | Resend API key (`re_...`) when `EMAIL_PROVIDER=resend`. |
+| `BREVO_API_KEY` | *Optional* | Brevo API key when `EMAIL_PROVIDER=brevo`. |
+| `RESEND_API_KEY` | *Optional* | Resend API key when `EMAIL_PROVIDER=resend`. |
 | `EMAIL_FROM` | *Derived* | Sender name and address for verification codes and dispatch notices. |
-| `DISPATCH_EMAIL` | `dispatch@janaawaz.in` | Municipal inbox where automated dispatch letters and work orders are emailed. |
-| `WATCHDOG_INTERVAL_SEC` | `60` | Frequency in seconds at which the background SLA watchdog inspects tickets. |
-| `SLA_TIME_SCALE` | `1.0` | Demo time compression factor (e.g. `3600` makes 1 hour elapse in 1 real second). |
+| `JWT_SECRET` | *None (Required, >=32 chars)* | Cryptographic secret for signing session tokens. Auto-generated in dev mode. |
+| `AUTHORITY_EMAILS` | `""` | Comma-separated emails automatically assigned the `authority` role upon login. |
+| `DEV_MODE` | `false` | When `true`, enables local testing OTP return and relaxed JWT rules. |
+| `CORS_ORIGINS` | `http://localhost:5173,http://localhost:3000` | Comma-separated allowed CORS origins. |
+| `WATCHDOG_INTERVAL_SEC` | `60` | Frequency in seconds for SLA watchdog ticket inspection. |
+| `SLA_TIME_SCALE` | `1.0` | Time acceleration factor for hackathon demonstrations (e.g. `3600` = 1 hr in 1 sec). |
 | `VITE_API_BASE` | `""` (Empty string for relative) | Frontend environment variable specifying backend FastAPI base URL. |
 
 ---
 
-## 🚀 Local Development Setup
+## 🛠️ Local Development Setup
 
 ### Prerequisites
 - Python 3.11+
@@ -169,10 +179,10 @@ pip install -r requirements.txt pytest
 cp .env.example .env
 # Edit .env with your GEMINI_API_KEY and DATABASE_URL
 
-# Run database migrations and start server
+# Start server
 uvicorn main:app --reload --port 8000
 ```
-Backend API interactive documentation will be available at:  
+Interactive API documentation:  
 👉 **http://localhost:8000/docs** (Swagger UI) & **http://localhost:8000/redoc**
 
 ### 2. Frontend Setup
@@ -192,12 +202,17 @@ Frontend application will be accessible at:
 
 ## 🧪 Automated Testing & CI/CD
 
-Jan Aawaz includes an automated test suite verifying security auth guards, heuristic fallback degradation, and watchdog worker idempotency.
+Jan Aawaz includes an automated test suite verifying security auth guards, authenticity screening, PII isolation, and watchdog worker idempotency.
 
 Run backend tests locally:
 ```bash
 cd backend
 python -m pytest tests -v
+```
+
+Verify undefined names (pyflakes & ruff):
+```bash
+python -m ruff check --select F821 .
 ```
 
 Run frontend production build verification:
@@ -206,71 +221,50 @@ cd frontend
 npm run build
 ```
 
-Both tests run automatically on every pull request and push to `main` via the GitHub Actions workflow in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+All tests run automatically on every pull request and push to `main` via the GitHub Actions workflow in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ---
 
-## 🚢 Production Deployment Guide
+## 🚀 Production Deployment Guide
 
-### 1. Database & Object Storage (Supabase)
+### 1. Database (Supabase PostgreSQL)
 - Create a Supabase project.
 - In **Database Settings > Connection Pooling**, copy the Transaction/Session Pooler connection string.
 - Format for async SQLAlchemy: `postgresql+asyncpg://postgres.[REF]:[PASS]@[HOST]:5432/postgres`.
-- In **Storage**, create a public bucket named `reports` (or use local filesystem storage via `UPLOAD_DIR`).
+- Tables and migrations are automatically created on startup via `ensure_schema()`.
 
-### 2. Backend Deployment (Render or Fly.io)
-> [!NOTE]
-> On Render, the repository root (`./`) is the service root directory. The build command is `pip install -r backend/requirements.txt`, and the start command runs from `backend/`:
-> `cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`
-> This is automated by [`render.yaml`](render.yaml) and [`Procfile`](Procfile). Alternatively, deploy using [`backend/Dockerfile`](backend/Dockerfile):
-```dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-EXPOSE 8000
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-- In your cloud host settings, configure the environment variables listed in the table above.
-- Set `DEV_MODE=false`.
+### 2. Backend Deployment (Render)
+- On Render, connect the repository with root directory `./`.
+- Build Command: `pip install -r backend/requirements.txt`
+- Start Command: `cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT`
+- Configure environment variables from `backend/.env.example`.
 
 ### 3. Frontend Deployment (Vercel)
-> [!IMPORTANT]
-> The root `vercel.json` has been removed. In the Vercel Project Settings, **Root Directory MUST be set to `frontend`**.
-- Link the repository to Vercel and configure the root directory as `frontend`.
-- Set Environment Variable: `VITE_API_BASE=https://your-backend-api.onrender.com`.
-- The configuration in [`frontend/vercel.json`](frontend/vercel.json) handles single-page app routing:
-```json
-{
-  "rewrites": [
-    {
-      "source": "/((?!api/).*)",
-      "destination": "/index.html"
-    }
-  ]
-}
-```
+- In Vercel Project Settings, set **Root Directory** to `frontend`.
+- Build Command: `npm run build`
+- Output Directory: `dist`
+- Set Environment Variable: `VITE_API_BASE=https://your-backend.onrender.com`.
 
 ---
 
-## 👥 Team & Contributions ("Who Built What")
+## 👥 Team & Contributions
 
 | Contributor | Focus Area | Key Contributions |
 |---|---|---|
-| **Syed Haseeb** (`@Syed-Haseeb97`) | Full-Stack & AI Pipeline Lead | End-to-end agentic triage pipeline, Gemini multimodal reasoning, Open GIS integrations, database schema, FastAPI backend, and React/Tailwind frontend architecture. |
-| **Teammate Placeholder 1** | Geospatial & Infrastructure Services | OpenStreetMap Overpass spatial queries, Open-Meteo microclimate integration, and GIS hotspot cluster algorithms. |
-| **Teammate Placeholder 2** | UI/UX & Citizen Accessibility | Responsive citizen portal, citizen authentication flows, multilingual explainer with speech synthesis, and dark/light civic styling. |
+| **Syed Haseeb** (`@Syed-Haseeb97`) | Full-Stack & AI Pipeline Lead | End-to-end 8-step agentic triage, Gemini multimodal reasoning, authenticity gate, privacy tracking, and React/Tailwind frontend. |
+| **Teammate 1** | Geospatial & Infrastructure Services | `TODO: fill` |
+| **Teammate 2** | UI/UX & Citizen Accessibility | `TODO: fill` |
 
 ---
 
-## ⚠️ Honest Limitations
+## 🔍 Honest Limitations
 
 As an engineering hackathon prototype, Jan Aawaz acknowledges several practical constraints:
-1. **Public Geospatial API Rate Limits**: Reverse geocoding uses the public OpenStreetMap Nominatim API, which strictly enforces a 1 request/second rate limit. In a state-scale deployment, a dedicated self-hosted Nominatim or Mapbox instance would be required.
-2. **Overpass API Latency**: The public Overpass API interpreter occasionally experiences traffic surges leading to 2-4 second response times. Jan Aawaz enforces a hard 5.8-second timeout with graceful fallback to zero sensitive sites so user requests never hang.
-3. **Simulated Dispatch Inbox**: Because real Indian municipal department engineering heads do not expose programmatic intake mailboxes, dispatches are routed to the centralized `DISPATCH_EMAIL` configured in environment settings.
-4. **Browser Speech Synthesis Variations**: The audible plain-language narration utilizes the client device's native `window.speechSynthesis`. Voice naturalness and regional language accent quality depend on the voices installed on the user's operating system and browser.
+1. **Demo Mode Dispatch by Default**: Automated dispatch letters run in `DISPATCH_MODE=demo` by default, routing work orders to the configured `DISPATCH_EMAIL` with a `[DEMO]` tag. In `live` mode, letters are routed directly to resolved municipal recipients.
+2. **Municipal Recipient Directory**: Currently includes one fully verified official municipal directory entry (Tiruchirappalli City Municipal Corporation street lights via `commr.trichy@tn.gov.in`, verified on TN Urban Tree). All unmapped municipal jurisdictions cleanly fall back to `DISPATCH_EMAIL` with an honest timeline notice.
+3. **Documented Policy Configuration**: Category definitions, standard SLA targets (`DEFAULT_SLA_MAP`), and department routing mappings in `backend/config.py` reflect administrative civic policy configuration, not mock data.
+4. **Public Geospatial API Rate Limits**: Reverse geocoding uses the public OpenStreetMap Nominatim API (1 req/s rate limit). Overpass sensitive site queries enforce a 5.8s timeout with graceful fallback.
+5. **Browser Speech Synthesis Variations**: Multilingual audio narration uses client-side `window.speechSynthesis`. Voice quality and language accent availability depend on the user's OS and browser voice libraries.
 
 ---
 
@@ -278,7 +272,5 @@ As an engineering hackathon prototype, Jan Aawaz acknowledges several practical 
 
 - Released under the open-source [MIT License](LICENSE).
 - Geodata & Mapping © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
-- Weather data provided by [Open-Meteo](https://open-meteo.com/) under CC BY 4.0.
-- Interoperability protocol aligns with the international [Open311 GeoReport v2](https://www.open311.org) specification.
 - Weather data provided by [Open-Meteo](https://open-meteo.com/) under CC BY 4.0.
 - Interoperability protocol aligns with the international [Open311 GeoReport v2](https://www.open311.org) specification.

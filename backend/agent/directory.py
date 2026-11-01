@@ -75,10 +75,13 @@ def resolve_recipient(
         if entry_cat != norm_cat:
             continue
 
+        if not norm_loc:
+            continue
+
         entry_city = entry.get("city", "").strip().lower()
-        # Match city by substring (e.g. "Tiruchirappalli" or "Trichy" in locality)
+        # Match city by substring (e.g. "Tiruchirappalli" or "Trichy" in locality; drop reverse-substring match)
         city_matched = False
-        if entry_city and (entry_city in norm_loc or norm_loc in entry_city):
+        if entry_city and entry_city in norm_loc:
             city_matched = True
         elif entry_city in ["tiruchirappalli", "trichy"] and ("trichy" in norm_loc or "tiruchirappalli" in norm_loc):
             city_matched = True
@@ -107,8 +110,9 @@ def resolve_recipient(
             "matched": True,
         }
 
-    # Fallback to configured DISPATCH_EMAIL
-    fallback_email = os.getenv("DISPATCH_EMAIL", "dispatch@janaawaz.in")
+    # Fallback to configured DISPATCH_EMAIL (remove hardcoded dispatch@janaawaz.in default)
+    raw_fallback = os.getenv("DISPATCH_EMAIL")
+    fallback_email = raw_fallback.strip() if raw_fallback and raw_fallback.strip() else None
     logger.info(f"No matching department for ({norm_cat}, '{locality_or_city}', lvl={escalation_level}); using fallback inbox: {fallback_email}")
     return {
         "to": fallback_email,

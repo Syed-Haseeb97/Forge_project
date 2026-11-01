@@ -24,6 +24,7 @@ export default function SubmitReport() {
   const [fileType, setFileType] = useState('image')
   const [submitting, setSubmitting] = useState(false)
   const [submittedReport, setSubmittedReport] = useState(null)
+  const [trace, setTrace] = useState(null)
   const [copiedToken, setCopiedToken] = useState(false)
   const [autofilling, setAutofilling] = useState(false)
   const [locating, setLocating] = useState(false)
@@ -233,6 +234,30 @@ export default function SubmitReport() {
   }
 
   // Auto-fill from photo or voice note via Gemini AI
+  useEffect(() => {
+    if (!submittedReport?.id) return
+    let active = true
+    const pollTrace = async () => {
+      try {
+        const { data } = await axios.get(`/api/reports/${submittedReport.id}/trace`)
+        if (active) {
+          setTrace(data)
+          if (data.is_complete) {
+            clearInterval(interval)
+          }
+        }
+      } catch (err) {
+        // quiet error on trace poll
+      }
+    }
+    pollTrace()
+    const interval = setInterval(pollTrace, 1000)
+    return () => {
+      active = false
+      clearInterval(interval)
+    }
+  }, [submittedReport?.id])
+
   const handleAutoFill = async () => {
     if (!file) {
       toast.error('Please attach a photo or audio recording first')
@@ -304,7 +329,7 @@ export default function SubmitReport() {
       if (file) fd.append('media', file)
 
       const { data } = await axios.post('/api/reports', fd)
-      toast.success('Incident logged. Multimodal AI triage complete.')
+      toast.success('Incident registered. AI triage is running.')
       setSubmittedReport(data)
       setSubmitting(false)
     } catch (err) {
@@ -390,11 +415,11 @@ export default function SubmitReport() {
               Incident Docket #{submittedReport.docket_no}
             </h1>
             <p className="mt-2 text-sm text-[#5f716e] dark:text-[#95a9a6] max-w-lg mx-auto">
-              Your grievance has been securely logged and queued for autonomous triage and official municipal dispatch.
+              Your grievance has been securely logged and queued for AI triage and dispatch (prototype).
             </p>
 
             {/* Phase M: Authenticity Gate "Under Review" Alert Banner */}
-            {['suspicious', 'spam'].includes(submittedReport.authenticity) && (
+            {['suspicious', 'spam'].includes(trace?.authenticity || submittedReport.authenticity) && (
               <div className="my-6 max-w-xl mx-auto p-4 sm:p-5 rounded-2xl border-2 border-amber-500/40 bg-amber-50/90 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 text-left shadow-xs">
                 <div className="flex items-start gap-2.5">
                   <div className="p-1 rounded-full bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 shrink-0 mt-0.5">
@@ -402,7 +427,7 @@ export default function SubmitReport() {
                   </div>
                   <div className="flex-1 space-y-1">
                     <h4 className="font-bold text-xs uppercase tracking-wider text-amber-800 dark:text-amber-300">
-                      Under Review: {submittedReport.authenticity_reason || 'Authenticity verification in progress'}
+                      Under Review: {trace?.authenticity_reason || submittedReport.authenticity_reason || 'Authenticity verification in progress'}
                     </h4>
                     <p className="text-xs leading-relaxed opacity-90">
                       Our automated authenticity screening flagged this grievance for human municipal review before official crew dispatch.
@@ -432,6 +457,33 @@ export default function SubmitReport() {
                 </div>
               </div>
             )}
+
+                        {/* Live Agent Trace Step List */}
+            <div className="my-6 max-w-xl mx-auto rounded-2xl border border-black/10 dark:border-white/10 bg-slate-50 dark:bg-white/5 p-4 text-left">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#0d3035] dark:text-[#f6f4ee] flex items-center gap-1.5">
+                  <CivicIcon name="sparkle" size={14} className="text-[#ba7c29]" /> Live AI Triage Pipeline
+                </span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${trace?.is_complete ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 animate-pulse'}`}>
+                  {trace?.is_complete ? 'Triage Complete' : 'Triage Running...'}
+                </span>
+              </div>
+              <div className="space-y-2">
+                {trace?.agent_trace && trace.agent_trace.length > 0 ? (
+                  trace.agent_trace.map((st, idx) => (
+                    <div key={idx} className="flex items-start gap-2 text-xs">
+                      <span className={`size-2 rounded-full mt-1.5 shrink-0 ${st.status === 'done' ? 'bg-emerald-500' : st.status === 'degraded' ? 'bg-amber-500' : st.status === 'skipped' ? 'bg-slate-400' : 'bg-rose-500'}`} />
+                      <div className="flex-1">
+                        <span className="font-semibold text-[#0d3035] dark:text-[#f6f4ee] capitalize">{st.step?.replace(/_/g, ' ')}: </span>
+                        <span className="text-slate-600 dark:text-slate-300">{st.summary || st.status}</span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-xs text-slate-500 italic">Initializing triage pipeline...</div>
+                )}
+              </div>
+            </div>
 
             {/* Prominent Citizen Tracking Token Box */}
             <div className="my-8 max-w-xl mx-auto rounded-2xl border-2 border-[#ba7c29]/50 bg-[#fffaf0] dark:bg-[#132a2f] p-6 text-left shadow-sm">
@@ -467,7 +519,7 @@ export default function SubmitReport() {
                 <CivicIcon name="alert" size={14} /> Save this to track your ticket
               </p>
               <p className="mt-1 text-[11px] text-[#6b7b79] dark:text-[#95a9a6] leading-relaxed">
-                A confirmation email with this token and a tracking link was sent to your inbox. You or anyone with this token can monitor SLA countdowns and municipal resolution records at any time.
+                we are emailing this token; check Spam if it does not arrive. You or anyone with this token can monitor SLA countdowns and municipal resolution records at any time.
               </p>
             </div>
 
@@ -512,37 +564,18 @@ export default function SubmitReport() {
         ) : submitting ? (
           <div className="rounded-[26px] border border-white/70 bg-white dark:bg-[#0b2529] p-8 sm:p-14 text-center shadow-[0_30px_70px_rgba(26,53,52,.16)]">
             <div className="ai-orbit relative mx-auto flex size-20 items-center justify-center rounded-full bg-[#0d3035] text-[#e8b855]">
-              <CivicIcon name="brain" size={32} />
-              <span className="absolute -right-1 top-0 size-3 rounded-full bg-[#e8b855]" />
+              <CivicIcon name="upload" size={32} />
+              <span className="absolute -right-1 top-0 size-3 rounded-full bg-[#e8b855] animate-ping" />
             </div>
             <p className="mt-7 text-[11px] font-bold tracking-[0.16em] uppercase text-[#ba7c29]">
-              CIVIC AI IS EVALUATING
+              TRANSMITTING REPORT
             </p>
             <h2 className="mt-2 font-serif text-3xl font-bold text-[#0d3035] dark:text-[#f6f4ee]">
-              Triaging your report
+              Uploading evidence...
             </h2>
             <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[#5f716e] dark:text-[#95a9a6]">
-              Extracting multimodal evidence, diagnosing hazard severity, setting target SLA response limits, and routing to the responsible engineering department.
+              Uploading photographic evidence and creating your incident docket. Once registered, AI triage runs in the background.
             </p>
-
-            <div className="mx-auto mt-8 max-w-xs space-y-3.5 text-left">
-              {[
-                'Visual & audio evidence analyzed',
-                'Priority hazard level evaluated',
-                'Department routing & SLA docket assigned',
-              ].map((label, idx) => (
-                <div key={label} className="flex items-center gap-3 text-xs font-semibold">
-                  <span className={`flex size-6 items-center justify-center rounded-full ${idx === 2 ? 'bg-[#fff3d8] text-[#ba7c29] dark:bg-[#34260f]' : 'bg-[#e3f0ea] text-[#2f7661] dark:bg-[#123830] dark:text-[#70b99e]'}`}>
-                    {idx === 2 ? (
-                      <span className="size-1.5 animate-pulse rounded-full bg-current" />
-                    ) : (
-                      <CivicIcon name="check" size={13} />
-                    )}
-                  </span>
-                  <span>{label}</span>
-                </div>
-              ))}
-            </div>
           </div>
         ) : (
           <div className="relative">
@@ -652,7 +685,7 @@ export default function SubmitReport() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*,.pdf"
+                    accept="image/*"
                     className="hidden"
                     onChange={(e) => handleFileChange(e, 'image')}
                   />

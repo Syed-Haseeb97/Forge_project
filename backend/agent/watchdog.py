@@ -67,14 +67,22 @@ async def run_watchdog_check() -> Dict[str, Any]:
 
     try:
         async with AsyncSessionLocal() as session:
+            from sqlalchemy import or_
             stmt = select(Report).where(
-                Report.status.in_([StatusEnum.open, StatusEnum.in_progress])
+                Report.status.in_([StatusEnum.open, StatusEnum.in_progress]),
+                or_(
+                    Report.authenticity.in_(["genuine", "unchecked"]),
+                    Report.authenticity.is_(None),
+                ),
+                Report.needs_human_review.is_(False),
             )
             res = await session.execute(stmt)
             active_reports = res.scalars().all()
             checked_count = len(active_reports)
 
             for report in active_reports:
+                if getattr(report, "authenticity", None) in ("suspicious", "spam") or getattr(report, "needs_human_review", False):
+                    continue
                 report_scale = _get_scale_for_report(report, scale)
                 sla_hrs = float(report.sla_hours or 72)
                 # Apply time scale compression

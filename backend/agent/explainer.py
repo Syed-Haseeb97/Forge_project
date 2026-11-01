@@ -54,14 +54,14 @@ def _build_fallback_explanation(report_data: Dict[str, Any], lang: str) -> str:
     dept = report_data.get("routed_to") or report_data.get("suggested_department") or "Public Works Department"
     sla = report_data.get("sla_hours", 72)
     safety = report_data.get("safety_precautions") or "Please maintain a safe distance and alert pedestrians."
-    docket = f"JA-2026-{str(report_data.get('id', ''))[:8].upper()}"
+    docket = report_data.get("docket_no") or f"JA-2026-{str(report_data.get('id', ''))[:8].upper()}"
 
     if lang == "hi":
         return (
             f"नमस्ते। आपके द्वारा दर्ज की गई समस्या '{title}' (डॉकेट: {docket}) की समीक्षा कर ली गई है। "
             f"1. स्थिति: इस समस्या को {dept} को अग्रेषित कर दिया गया है। "
             f"2. आगामी कदम: संबंधित नगर निगम टीम द्वारा स्थल निरीक्षण और तकनीकी कार्य आदेश जारी किया जा रहा है। "
-            f"3. समाधान समय-सीमा: आधिकारिक नागरिक सेवा मानक (SLA) के अनुसार इसे {sla} घंटों के भीतर ठीक करने का लक्ष्य है। "
+            f"3. समाधान समय-सीमा: मानक सेवा समय-सीमा (SLA) के अनुसार इसे {sla} घंटों के भीतर ठीक करने का लक्ष्य है। "
             f"4. सुरक्षा परामर्श: {safety} "
             f"5. समाधान में देरी होने पर: यदि समय-सीमा के भीतर कार्य पूरा नहीं होता है, तो सिस्टम स्वतः इसे उच्च अधिकारियों (विभागाध्यक्ष एवं नगर आयुक्त) को एस्केलेट करता है।"
         )
@@ -97,7 +97,7 @@ def _build_fallback_explanation(report_data: Dict[str, Any], lang: str) -> str:
             f"नमस्कार. आपण नोंदवलेली तक्रार '{title}' (डॉकेट: {docket}) तपासली गेली आहे. "
             f"1. स्थिती: ही तक्रार {dept} विभागाकडे सोपवण्यात आली आहे. "
             f"2. पुढील पाऊल: संबंधित पथक प्रत्यक्ष जागेची पाहणी करून दुरुस्तीचे काम हाती घेईल. "
-            f"3. मुदत: महापालिकेच्या नागरिक सनदेनुसार {sla} तासांच्या आत काम पूर्ण करण्याचे उद्दिष्ट आहे. "
+            f"3. मुदत: मानक सेवा मार्गदर्शक तत्त्वांनुसार {sla} तासांच्या आत काम पूर्ण करण्याचे उद्दिष्ट आहे. "
             f"4. सुरक्षिततेची खबरदारी: {safety} "
             f"5. तक्रार निवारणात विलंब झाल्यास: मुदतीनंतर काम न झाल्यास प्रणाली स्वतःहून विभागप्रमुख आणि आयुक्तांकडे तक्रार वर्ग करते."
         )
@@ -125,21 +125,24 @@ def _build_fallback_explanation(report_data: Dict[str, Any], lang: str) -> str:
             f"Hello. Your grievance regarding '{title}' (Docket: {docket}) has been logged and triaged. "
             f"1. What was found: A civic infrastructure issue categorized under '{report_data.get('category', 'civic fault')}' was identified with severity '{report_data.get('severity', 'medium')}'. "
             f"2. What happens next: The incident has been dispatched to {dept}. An engineering inspection team will be assigned to execute on-site remediation. "
-            f"3. Target Deadline: Under standard civic resolution SLA guidelines, the resolution turnaround is {sla} hours. "
+            f"3. Target Deadline: Standard estimated turnaround is {sla} hours. "
             f"4. Safety Advice: {safety} "
             f"5. Escalation: If unresolved by the target deadline, our autonomous watchdog will automatically escalate this docket to the Department Head and Municipal Commissioner."
         )
 
 
-async def generate_plain_language_explanation(report_data: Dict[str, Any], lang: str) -> str:
-    """Generate an accessible citizen explanation in the target language using Gemini."""
+async def generate_plain_language_explanation(report_data: Dict[str, Any], lang: str) -> tuple[str, bool]:
+    """Generate an accessible citizen explanation in the target language using Gemini.
+    
+    Returns (explanation_text, is_ai_generated).
+    """
     lang_name = SUPPORTED_LANGUAGES.get(lang, "English")
     client = _get_client()
 
     if not client:
-        return _build_fallback_explanation(report_data, lang)
+        return _build_fallback_explanation(report_data, lang), False
 
-    docket = f"JA-2026-{str(report_data.get('id', ''))[:8].upper()}"
+    docket = report_data.get("docket_no") or f"JA-2026-{str(report_data.get('id', ''))[:8].upper()}"
     title = report_data.get("title", "Civic Incident")
     description = report_data.get("description", "")
     category = report_data.get("category", "General")
@@ -195,9 +198,9 @@ Write the citizen explanation in natural, fluent {lang_name}. Keep it reassuring
                 timeout=5.8,
             )
             if response and response.text and len(response.text.strip()) > 40:
-                return response.text.strip()
+                return response.text.strip(), True
         except Exception as e:
             logger.warning(f"Gemini explainer model {model_name} failed: {e}")
             continue
 
-    return _build_fallback_explanation(report_data, lang)
+    return _build_fallback_explanation(report_data, lang), False

@@ -32,8 +32,8 @@ class EvidenceAnalysis(BaseModel):
         ...,
         description="Initial severity assessed purely from visual/audio evidence"
     )
-    confidence: float = Field(
-        default=0.85,
+    confidence: Optional[float] = Field(
+        default=None,
         ge=0.0,
         le=1.0,
         description="Confidence score of evidence understanding between 0.0 and 1.0"
@@ -65,8 +65,8 @@ class TriageDecision(BaseModel):
         ...,
         description="Detailed justification explicitly citing which environmental/recurrence/weather signals influenced or escalated the decision"
     )
-    confidence: float = Field(
-        default=0.9,
+    confidence: Optional[float] = Field(
+        default=None,
         ge=0.0,
         le=1.0,
         description="Confidence in final triage decision between 0.0 and 1.0"

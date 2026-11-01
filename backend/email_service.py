@@ -1,3 +1,4 @@
+import html
 import os
 import random
 import smtplib
@@ -19,10 +20,8 @@ GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 BREVO_API_KEY = os.getenv("BREVO_API_KEY")
 
-DEFAULT_FROM = "Jan Aawaz (जनAawaz) Portal <onboarding@resend.dev>" if EMAIL_PROVIDER == "resend" else (
-    f"Jan Aawaz (जनAawaz) Portal <{GMAIL_USER}>" if GMAIL_USER else "Jan Aawaz Portal <noreply@janaawaz.in>"
-)
-EMAIL_FROM = os.getenv("EMAIL_FROM") or DEFAULT_FROM
+# Sender must come strictly from environment variables (EMAIL_FROM or GMAIL_USER)
+EMAIL_FROM = os.getenv("EMAIL_FROM") or (f"Jan Aawaz Portal <{GMAIL_USER}>" if GMAIL_USER else "Jan Aawaz Portal <noreply@example.com>")
 
 
 def is_email_configured() -> bool:
@@ -301,6 +300,7 @@ def send_dispatch_email(
     effective_reply_to = reply_to or os.getenv("REPLY_TO")
     clean_cc = [c.strip() for c in (cc or []) if c and c.strip()]
 
+    escaped_body = html.escape(body_text)
     html_content = f"""<!DOCTYPE html>
 <html>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f6f4ee; padding: 24px; color: #102a2f;">
@@ -310,7 +310,7 @@ def send_dispatch_email(
       <p style="margin: 4px 0 0 0; font-size: 11px; opacity: 0.8; letter-spacing: 0.1em; text-transform: uppercase;">MUNICIPAL INFRASTRUCTURE & CIVIC REDRESSAL</p>
     </div>
     <div style="padding: 28px; font-size: 13px; line-height: 1.7; color: #334e4c; white-space: pre-wrap;">
-{body_text}
+{escaped_body}
     </div>
     <div style="background-color: #08272b; padding: 14px 28px; text-align: center; color: rgba(255,255,255,0.4); font-size: 10px;">
       Sent via Jan Aawaz Autonomous Civic Infrastructure · Hackathon prototype, not an official government service
@@ -364,12 +364,16 @@ def send_tracking_email(
 
     subject = f"Jan Aawaz Grievance Registered #{docket_no} [Tracking Token]"
     plain_text = (
-        f"Your civic grievance has been officially registered on Jan Aawaz (जनAawaz).\n\n"
+        f"Your civic grievance has been registered on Jan Aawaz (जनAawaz).\n\n"
         f"Docket Reference: #{docket_no}\n"
         f"Citizen Tracking Token: {tracking_token}\n"
         f"Public Live Tracking Link: {tracking_url}\n\n"
-        f"Save your tracking token to monitor live SLA countdown, AI evaluation rationale, and departmental dispatch updates without exposing your personal information."
+        f"Save your tracking code to monitor live SLA countdown, AI evaluation rationale, and departmental dispatch updates without exposing your personal information."
     )
+
+    esc_docket = html.escape(docket_no)
+    esc_token = html.escape(tracking_token)
+    esc_url = html.escape(tracking_url)
 
     html_content = f"""<!DOCTYPE html>
 <html>
@@ -384,15 +388,15 @@ def send_tracking_email(
       
       <div style="background-color: #fffaf0; border: 1px solid rgba(189,127,35,0.3); border-radius: 12px; padding: 18px; margin: 20px 0; text-align: center;">
         <div style="font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #ba7c29;">OFFICIAL DOCKET NUMBER</div>
-        <div style="font-size: 20px; font-weight: 800; color: #0d3035; font-family: monospace; margin: 4px 0 12px 0;">#{docket_no}</div>
+        <div style="font-size: 20px; font-weight: 800; color: #0d3035; font-family: monospace; margin: 4px 0 12px 0;">#{esc_docket}</div>
         
         <div style="font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #347161;">CITIZEN TRACKING TOKEN</div>
-        <div style="font-size: 24px; font-weight: 800; color: #2f7661; font-family: monospace; letter-spacing: 0.1em; margin: 4px 0;">{tracking_token}</div>
-        <div style="font-size: 11px; color: #70817e; margin-top: 6px;">Save this private token to verify live progress anytime.</div>
+        <div style="font-size: 24px; font-weight: 800; color: #2f7661; font-family: monospace; letter-spacing: 0.1em; margin: 4px 0;">{esc_token}</div>
+        <div style="font-size: 11px; color: #70817e; margin-top: 6px;">Save this tracking code to verify live progress anytime.</div>
       </div>
 
       <div style="text-align: center; margin: 26px 0;">
-        <a href="{tracking_url}" style="display: inline-block; background-color: #0d3035; color: #e8b855; font-size: 12px; font-weight: 800; text-decoration: none; padding: 12px 24px; border-radius: 9999px; letter-spacing: 0.05em;">TRACK YOUR DOCKET LIVE →</a>
+        <a href="{esc_url}" style="display: inline-block; background-color: #0d3035; color: #e8b855; font-size: 12px; font-weight: 800; text-decoration: none; padding: 12px 24px; border-radius: 9999px; letter-spacing: 0.05em;">TRACK YOUR DOCKET LIVE →</a>
       </div>
 
       <p style="font-size: 11px; color: #718481; line-height: 1.5; border-top: 1px solid rgba(23,62,66,0.1); padding-top: 16px; margin-bottom: 0;">

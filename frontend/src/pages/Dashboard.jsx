@@ -1120,7 +1120,7 @@ export default function Dashboard() {
                   <div className="space-y-4">
                     {stats?.by_category && Object.entries(stats.by_category).length > 0 ? (
                       Object.entries(stats.by_category).slice(0, 4).map(([cat, count]) => {
-                        const pct = stats.total > 0 ? Math.round((count / stats.total) * 100) : 25
+                        const pct = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0
                         return (
                           <div key={cat}>
                             <div className="mb-1.5 flex justify-between text-xs">

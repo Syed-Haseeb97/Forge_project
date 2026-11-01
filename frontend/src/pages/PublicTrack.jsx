@@ -269,7 +269,7 @@ export default function PublicTrack() {
                 </span>
               </div>
               <p className="font-semibold text-sm sm:text-base text-[#0d3035] dark:text-[#f6f4ee] truncate">
-                {data.dispatch_info?.designation || 'Municipal Engineering Division'}
+                {data.dispatch_info?.status_text || data.dispatch_info?.designation || 'Municipal Engineering Division'}
               </p>
               <p className="text-[10px] text-[#8a9996] truncate">
                 {data.dispatch_info?.time_sent
@@ -366,3 +366,4 @@ export default function PublicTrack() {
     </div>
   )
 }
+
